@@ -1,0 +1,13 @@
+{
+  "projectType": "web",
+  "frameworks": ["React", "Node.js", "Express", "Tailwind CSS", "Vite"],
+  "languages": ["TypeScript", "JavaScript", "Markdown"],
+  "packageManager": "npm",
+  "sourceDirs": ["ui/src", "server"],
+  "testDirs": ["ui/src/__tests__", "server/__tests__"],
+  "docsDirs": ["docs"],
+  "entryPoints": ["server/index.js", "ui/src/main.tsx"],
+  "rules": {
+    "namingConvention": "lowercase-dashed"
+  }
+} 
