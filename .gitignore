@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+/node_modules # Ignore root node_modules too, just in case
+
+# Build output
+dist/
+build/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.development
+!.env.production
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscsettings
+*.sln.docstates
+
+# Temporary files
+tmp/
+temp/
+
+# Optional npm/yarn/pnpm cache directories
+.npm/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-store/ 
