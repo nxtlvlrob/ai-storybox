@@ -10,6 +10,7 @@ app.use(express.static(path.resolve(__dirname, '../ui/dist')));
 
 // Simple test route
 app.get('/api/hello', (req, res) => {
+  console.log('Hello from backend!');
   res.json({ message: 'Hello from backend!' });
 });
 
