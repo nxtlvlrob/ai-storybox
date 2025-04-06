@@ -99,62 +99,75 @@ export function ProfileSetupScreen() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-screen bg-yellow-100 p-4 md:p-8">
-      {/* Form Area */}
-      <div className="w-full max-w-md flex-grow flex flex-col justify-center">
-        <h1 className="text-3xl md:text-4xl font-bold mb-6 text-yellow-800 text-center">Tell Us About You!</h1>
+    <div className="flex flex-col items-center justify-between h-screen bg-yellow-100 overflow-hidden">
+      {/* Form Area - Use flex-grow to take available space, allow potential shrinking if needed */}
+      {/* Added overflow-y-auto and max-h-[calc(100vh-SOME_KEYBOARD_HEIGHT)] IF we needed scrolling when keyboard is up */} 
+      {/* Let's try without scrolling first */}
+      <div className="w-full max-w-md flex-grow flex flex-col justify-center pt-2 pb-1"> {/* Reduced padding top/bottom */} 
+        <h1 className="text-2xl md:text-3xl font-bold mb-4 text-yellow-800 text-center"> {/* Reduced text size and margin */} 
+          Tell Us About You!
+        </h1>
         
-        <div className="w-full space-y-5 bg-white p-6 rounded-lg shadow-md" onClick={() => setInputFocus(null)} /* Hide keyboard if clicking outside specific inputs */>
+        {/* Reduced internal spacing with space-y-4 */}
+        <div className="w-full space-y-4 bg-white p-4 rounded-lg shadow-md" onClick={() => setInputFocus(null)} > {/* Reduced padding */} 
           
           {/* Name Input Display */}
-          <div onClick={(e) => e.stopPropagation()} /* Prevent clicks here from closing keyboard */>
-            <label htmlFor="name-display" className="block text-lg font-medium text-gray-700 mb-1">Name</label>
+          <div onClick={(e) => e.stopPropagation()} >
+            {/* Reduced label size and margin */}
+            <label htmlFor="name-display" className="block text-base font-medium text-gray-700 mb-1">Name</label>
             <div 
               id="name-display"
               onClick={showKeyboard} 
-              className={`w-full px-4 py-3 border rounded-lg text-lg cursor-text ${inputFocus === 'name' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'} ${!profileData.name ? 'text-gray-400' : 'text-gray-900'}`}
+              // Reduced padding and text size
+              className={`w-full px-3 py-2 border rounded-lg text-base cursor-text ${inputFocus === 'name' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'} ${!profileData.name ? 'text-gray-400' : 'text-gray-900'}`}
             >
               {profileData.name || "Tap to enter name"}
             </div>
           </div>
 
           {/* Birthday Input */}
-          <div onClick={(e) => e.stopPropagation()}> 
-            <label htmlFor="birthday" className="block text-lg font-medium text-gray-700 mb-1">Birthday</label>
+           <div onClick={(e) => e.stopPropagation()}> 
+             {/* Reduced label size and margin */}
+            <label htmlFor="birthday" className="block text-base font-medium text-gray-700 mb-1">Birthday</label>
             <DatePicker 
               id="birthday"
               selected={profileData.birthday}
               onChange={handleBirthdayChange}
-              onFocus={() => setInputFocus(null)} // Hide keyboard on date picker focus
+              onFocus={() => setInputFocus(null)} 
               dateFormat="MMMM d, yyyy"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-blue-500 focus:border-blue-500"
+              // Reduced padding and text size for the input part
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
               placeholderText="Select a date"
               showYearDropdown
               scrollableYearDropdown
               yearDropdownItemNumber={40} 
               maxDate={new Date()} 
+              // Ensure dropdown portal is used if it overflows otherwise
+              // portalId="root-portal" 
             />
           </div>
 
           {/* Gender Selection */}
-          <div onClick={(e) => e.stopPropagation()}> 
-            <label className="block text-lg font-medium text-gray-700 mb-2">Gender (Optional)</label>
-            <div className="flex space-x-3">
+           <div onClick={(e) => e.stopPropagation()}> 
+             {/* Reduced label size and margin */}
+            <label className="block text-base font-medium text-gray-700 mb-1">Gender (Optional)</label>
+             {/* Reduced button padding and text size */} 
+            <div className="flex space-x-2"> {/* Reduced space between buttons */} 
               <button 
                 onClick={() => handleGenderSelect('boy')}
-                className={`flex-1 py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === 'boy' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white text-blue-500 border-blue-300 hover:bg-blue-50'}`}
+                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === 'boy' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white text-blue-500 border-blue-300 hover:bg-blue-50'}`}
               >
                 Boy
               </button>
               <button 
                 onClick={() => handleGenderSelect('girl')}
-                className={`flex-1 py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === 'girl' ? 'bg-pink-500 text-white border-pink-600' : 'bg-white text-pink-500 border-pink-300 hover:bg-pink-50'}`}
+                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === 'girl' ? 'bg-pink-500 text-white border-pink-600' : 'bg-white text-pink-500 border-pink-300 hover:bg-pink-50'}`}
               >
                 Girl
               </button>
               <button 
                 onClick={handleSkipGender}
-                className={`py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === undefined ? 'bg-gray-500 text-white border-gray-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100'}`}
+                className={`py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === undefined ? 'bg-gray-500 text-white border-gray-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100'}`}
               >
                 Skip
               </button>
@@ -164,15 +177,17 @@ export function ProfileSetupScreen() {
         </div>
         
         {/* Navigation Button */}
-        <button 
-          className="mt-8 mb-4 self-center px-8 py-4 bg-blue-500 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100"
+         {/* Reduced margin, padding, text size */} 
+         <button 
+          className="mt-5 mb-2 self-center px-6 py-2 bg-blue-500 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100"
           onClick={handleNextClick}
         >
           Next: Create Avatar
         </button>
       </div>
 
-      {/* Keyboard Area */}
+      {/* Keyboard Area - Remains the same */} 
+      {/* ... (Keyboard component code) ... */} 
       <div className={`w-full sticky bottom-0 transition-all duration-300 ease-in-out ${inputFocus === 'name' ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
         {inputFocus === 'name' && (
           <Keyboard
@@ -206,12 +221,12 @@ export function ProfileSetupScreen() {
             syncInstanceInputs={true} 
             buttonTheme={[
               {
-                class: "shift-key",
+                class: "shift-key", 
                 buttons: "{shift}"
               },
               {
-                class: "hg-activeButton",
-                buttons: keyboardLayout === 'shift' ? "{shift}" : ""
+                class: "hg-activeButton", 
+                buttons: keyboardLayout === 'shift' ? "{shift}" : "" 
               }
             ]}
           />
