@@ -140,23 +140,22 @@ export function AvatarCreationScreen() {
       {/* Title - Slightly larger margin */} 
       <h1 className="text-xl md:text-2xl font-bold text-purple-800 text-center mb-4 md:mb-6">Create Your Avatar</h1>
 
-      {/* Main Row: Increased overall max-width and gap */} 
-      <div className="flex items-center justify-center w-full max-w-xl mb-6 md:mb-8 gap-4 md:gap-6"> 
-        {/* Left Controls - Increased spacing */}
-        <div className="flex flex-col items-center space-y-4 w-1/3"> 
+      {/* Main Row: Increased overall max-width, adjusted column sizing */}
+      <div className="flex items-center justify-center w-full max-w-2xl mb-6 md:mb-8 gap-4 md:gap-6"> 
+        {/* Left Controls - Removed w-1/3, added max-w-xs items-center */}
+        <div className="flex flex-col items-center space-y-4 max-w-xs flex-grow"> 
           <OptionControl label="Hair Style" optionKey="hairStyleIndex" />
           <OptionControl label="Hair Color" optionKey="hairColorIndex" />
           <OptionControl label="Skin Tone" optionKey="skinColorIndex" />
         </div>
 
-        {/* Avatar Preview - Increased size significantly */}
-        <div className="w-48 h-48 md:w-56 md:h-56 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-purple-300 flex-shrink-0">
-          {/* Added flex centering to inner div */}
+        {/* Avatar Preview - Kept the same */}
+        <div className="w-48 h-48 md:w-56 md:h-56 mx-4 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-purple-300 flex-shrink-0">
           <div dangerouslySetInnerHTML={{ __html: avatarSvg }} className="w-full h-full scale-110 flex items-center justify-center" />
         </div>
 
-        {/* Right Controls - Increased spacing */}
-        <div className="flex flex-col items-center space-y-4 w-1/3"> 
+        {/* Right Controls - Removed w-1/3, added max-w-xs items-center */}
+        <div className="flex flex-col items-center space-y-4 max-w-xs flex-grow"> 
           <OptionControl label="Eyes" optionKey="eyeStyleIndex" />
           <OptionControl label="Mouth" optionKey="mouthStyleIndex" />
           <OptionControl label="Glasses" optionKey="glassesStyleIndex" />
