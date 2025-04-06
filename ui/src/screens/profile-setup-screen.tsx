@@ -1,18 +1,222 @@
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import DatePicker from 'react-datepicker'
+import Keyboard, { SimpleKeyboard } from 'react-simple-keyboard'
+
+import 'react-datepicker/dist/react-datepicker.css'
+import 'react-simple-keyboard/build/css/index.css'
+
+// Define the updated structure for profile data
+interface ProfileData {
+  name: string;
+  birthday: Date | null; // Changed from age string to Date object or null
+  gender?: 'boy' | 'girl'; // Optional field remains
+}
 
 export function ProfileSetupScreen() {
   const navigate = useNavigate()
+  const [profileData, setProfileData] = useState<ProfileData>({
+    name: '',
+    birthday: null, // Initialize birthday as null
+    gender: undefined,
+  });
+  // State to manage which input is focused (for keyboard)
+  const [inputFocus, setInputFocus] = useState<string | null>(null);
+  const [keyboardLayout, setKeyboardLayout] = useState('default'); // For potential layout changes
+  const keyboardRef = useRef<SimpleKeyboard | null>(null); // Use Keyboard component type for ref
+
+  // Handler to update state for text inputs (Name)
+  function handleInputChange(value: string) {
+    const previousLength = profileData.name.length;
+    if (inputFocus === 'name') {
+      setProfileData(prevData => ({ ...prevData, name: value }));
+      // If first character typed, switch back to default layout
+      if (previousLength === 0 && value.length === 1) {
+        setKeyboardLayout('default');
+      }
+    }
+  }
+
+  // Handler for keyboard events (e.g., Shift, CapsLock)
+  function handleKeyPress(button: string) {
+    console.log("Button pressed:", button);
+    // Handle layout changes like shift/caps
+    if (button === "{shift}" || button === "{lock}") {
+      handleShift();
+    } else if (button === "{done}") {
+      // Handle hiding keyboard
+      setInputFocus(null);
+    } else if (button === "{backspace}") {
+      // onChange handles backspace, this is just for logging/debugging if needed
+    }
+  }
+
+  function handleShift() {
+    const currentLayout = keyboardLayout;
+    const shiftToggle = currentLayout === "default" ? "shift" : "default";
+    console.log(`Switching layout to: ${shiftToggle}`);
+    setKeyboardLayout(shiftToggle);
+  }
+
+  // Function to show the keyboard and set initial layout
+  function showKeyboard() {
+    // Default to shift layout if input is empty, otherwise default
+    setKeyboardLayout(profileData.name.length === 0 ? 'shift' : 'default');
+    setInputFocus('name');
+  }
+
+  // Effect to sync keyboard state with external state changes
+  useEffect(() => {
+    if (inputFocus === 'name' && keyboardRef.current) {
+      // Use setInput to sync the keyboard's internal value
+      (keyboardRef.current as SimpleKeyboard).setInput(profileData.name);
+    }
+  }, [profileData.name, inputFocus]);
+
+  // Handler for DatePicker change
+  function handleBirthdayChange(date: Date | null) {
+    setProfileData(prevData => ({ ...prevData, birthday: date }));
+    setInputFocus(null); // Hide keyboard when changing date
+  }
+
+  // Handler for gender selection
+  function handleGenderSelect(selectedGender: 'boy' | 'girl') {
+    setProfileData(prevData => ({ ...prevData, gender: selectedGender }));
+    setInputFocus(null); // Hide keyboard when selecting gender
+  }
+
+  function handleSkipGender() {
+    setProfileData(prevData => ({ ...prevData, gender: undefined }));
+    setInputFocus(null); // Hide keyboard when skipping gender
+  }
+
+  // TODO: Add form validation
+  function handleNextClick() {
+    setInputFocus(null); // Ensure keyboard is hidden before navigating
+    console.log('Profile Data:', profileData); 
+    // TODO: Persist data
+    navigate('/setup-avatar');
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-yellow-100 p-4">
-      <h1 className="text-3xl font-bold mb-4">Set Up Your Profile</h1>
-      {/* TODO: Add profile form elements */}
-      <p className="mb-6">Tell us a bit about the listener.</p>
-      <button 
-        className="px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg shadow hover:bg-blue-600"
-        onClick={() => navigate('/setup-avatar')}
-      >
-        Next: Create Avatar
-      </button>
+    <div className="flex flex-col items-center justify-between min-h-screen bg-yellow-100 p-4 md:p-8">
+      {/* Form Area */}
+      <div className="w-full max-w-md flex-grow flex flex-col justify-center">
+        <h1 className="text-3xl md:text-4xl font-bold mb-6 text-yellow-800 text-center">Tell Us About You!</h1>
+        
+        <div className="w-full space-y-5 bg-white p-6 rounded-lg shadow-md" onClick={() => setInputFocus(null)} /* Hide keyboard if clicking outside specific inputs */>
+          
+          {/* Name Input Display */}
+          <div onClick={(e) => e.stopPropagation()} /* Prevent clicks here from closing keyboard */>
+            <label htmlFor="name-display" className="block text-lg font-medium text-gray-700 mb-1">Name</label>
+            <div 
+              id="name-display"
+              onClick={showKeyboard} 
+              className={`w-full px-4 py-3 border rounded-lg text-lg cursor-text ${inputFocus === 'name' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'} ${!profileData.name ? 'text-gray-400' : 'text-gray-900'}`}
+            >
+              {profileData.name || "Tap to enter name"}
+            </div>
+          </div>
+
+          {/* Birthday Input */}
+          <div onClick={(e) => e.stopPropagation()}> 
+            <label htmlFor="birthday" className="block text-lg font-medium text-gray-700 mb-1">Birthday</label>
+            <DatePicker 
+              id="birthday"
+              selected={profileData.birthday}
+              onChange={handleBirthdayChange}
+              onFocus={() => setInputFocus(null)} // Hide keyboard on date picker focus
+              dateFormat="MMMM d, yyyy"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-blue-500 focus:border-blue-500"
+              placeholderText="Select a date"
+              showYearDropdown
+              scrollableYearDropdown
+              yearDropdownItemNumber={40} 
+              maxDate={new Date()} 
+            />
+          </div>
+
+          {/* Gender Selection */}
+          <div onClick={(e) => e.stopPropagation()}> 
+            <label className="block text-lg font-medium text-gray-700 mb-2">Gender (Optional)</label>
+            <div className="flex space-x-3">
+              <button 
+                onClick={() => handleGenderSelect('boy')}
+                className={`flex-1 py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === 'boy' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white text-blue-500 border-blue-300 hover:bg-blue-50'}`}
+              >
+                Boy
+              </button>
+              <button 
+                onClick={() => handleGenderSelect('girl')}
+                className={`flex-1 py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === 'girl' ? 'bg-pink-500 text-white border-pink-600' : 'bg-white text-pink-500 border-pink-300 hover:bg-pink-50'}`}
+              >
+                Girl
+              </button>
+              <button 
+                onClick={handleSkipGender}
+                className={`py-3 px-4 rounded-lg text-lg font-semibold border-2 ${profileData.gender === undefined ? 'bg-gray-500 text-white border-gray-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100'}`}
+              >
+                Skip
+              </button>
+            </div>
+          </div>
+
+        </div>
+        
+        {/* Navigation Button */}
+        <button 
+          className="mt-8 mb-4 self-center px-8 py-4 bg-blue-500 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100"
+          onClick={handleNextClick}
+        >
+          Next: Create Avatar
+        </button>
+      </div>
+
+      {/* Keyboard Area */}
+      <div className={`w-full sticky bottom-0 transition-all duration-300 ease-in-out ${inputFocus === 'name' ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0 pointer-events-none'}`}>
+        {inputFocus === 'name' && (
+          <Keyboard
+            keyboardRef={(r: SimpleKeyboard) => (keyboardRef.current = r)} 
+            layoutName={keyboardLayout}
+            onChange={handleInputChange}
+            onKeyPress={handleKeyPress}
+            inputName="name" 
+            value={profileData.name} 
+            layout={{
+              'default': [
+                'q w e r t y u i o p',
+                'a s d f g h j k l',
+                '{shift} z x c v b n m {backspace}',
+                '{space} {done}'
+              ],
+              'shift': [
+                'Q W E R T Y U I O P',
+                'A S D F G H J K L',
+                '{shift} Z X C V B N M {backspace}',
+                '{space} {done}'
+              ]
+            }}
+            display={{
+              '{done}': 'Done',
+              '{shift}': '⇧',
+              '{space}': ' ',
+              '{backspace}': '⌫'
+            }}
+            theme={"hg-theme-default hg-layout-default my-keyboard-theme"} 
+            syncInstanceInputs={true} 
+            buttonTheme={[
+              {
+                class: "shift-key",
+                buttons: "{shift}"
+              },
+              {
+                class: "hg-activeButton",
+                buttons: keyboardLayout === 'shift' ? "{shift}" : ""
+              }
+            ]}
+          />
+        )}
+      </div>
     </div>
   )
 } 

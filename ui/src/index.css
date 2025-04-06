@@ -1,1 +1,80 @@
 @import "tailwindcss";
+
+/* Custom Styles for react-simple-keyboard */
+.my-keyboard-theme {
+  /* Overall keyboard appearance */
+  padding: 10px;
+  background-color: #f0f4f8; /* Lighter, softer background */
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.my-keyboard-theme .hg-button {
+  /* General button styling */
+  height: 60px; /* Taller buttons */
+  font-size: 1.5rem; /* Larger font for readability */
+  border-radius: 8px; /* More rounded corners */
+  border: none; /* Remove default border */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15); /* Soft shadow */
+  background-color: #ffffff; /* White keys */
+  color: #334155; /* Dark slate text */
+  margin: 4px; /* Add spacing between keys */
+  transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.my-keyboard-theme .hg-button:active {
+  /* Button press effect */
+  background-color: #e2e8f0; /* Light grey on press */
+  transform: translateY(1px); /* Simulate press */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); 
+}
+
+/* Specific function key styling */
+.my-keyboard-theme .hg-button-space {
+  min-width: 200px; /* Wider space bar */
+  background-color: #cbd5e1; /* Slightly darker grey */
+}
+.my-keyboard-theme .hg-button-space:active {
+  background-color: #94a3b8;
+}
+
+.my-keyboard-theme .hg-button-backspace {
+  background-color: #fecaca; /* Soft red */
+  color: #b91c1c;
+}
+.my-keyboard-theme .hg-button-backspace:active {
+  background-color: #fca5a5;
+}
+
+/* Assuming {done} uses the class 'hg-button-done' or we add it via buttonTheme */
+.my-keyboard-theme .hg-button-done {
+  background-color: #a7f3d0; /* Soft green */
+  color: #047857;
+}
+.my-keyboard-theme .hg-button-done:active {
+  background-color: #6ee7b7;
+}
+
+/* Styling for the shift key */
+.my-keyboard-theme .shift-key { /* Base style (using class added via buttonTheme) */
+  background-color: #e2e8f0; /* Light grey */
+  color: #475569;
+}
+
+/* Active state for shift key (using class added via buttonTheme) */
+.my-keyboard-theme .shift-key.hg-activeButton {
+   background-color: #64748b; /* Darker slate */
+   color: #ffffff; /* White text */
+   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); /* Inset shadow for active state */
+}
+
+/* Add some slight overrides for the react-datepicker to fit the theme */
+.react-datepicker {
+  font-size: 1rem !important; /* Ensure font size isn't too small */
+}
+.react-datepicker__header {
+  background-color: #f0f4f8 !important;
+}
+.react-datepicker__day--selected {
+  background-color: #60a5fa !important; /* Blue for selected date */
+}
