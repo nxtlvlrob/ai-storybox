@@ -135,15 +135,13 @@ export function ProfileSetupScreen() {
               onChange={handleBirthdayChange}
               onFocus={() => setInputFocus(null)} 
               dateFormat="MMMM d, yyyy"
-              // Reduced padding and text size for the input part
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base focus:ring-blue-500 focus:border-blue-500"
               placeholderText="Select a date"
-              showYearDropdown
-              scrollableYearDropdown
-              yearDropdownItemNumber={40} 
               maxDate={new Date()} 
-              // Ensure dropdown portal is used if it overflows otherwise
-              // portalId="root-portal" 
+              withPortal
+              popperPlacement="top-start"
+              showYearDropdown
+              dropdownMode="select"
             />
           </div>
 

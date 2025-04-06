@@ -78,3 +78,95 @@
 .react-datepicker__day--selected {
   background-color: #60a5fa !important; /* Blue for selected date */
 }
+
+/* --- react-datepicker Portal Styles --- */
+
+.react-datepicker__portal {
+  /* Style the overlay background */
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999; /* Ensure it's on top */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.react-datepicker__portal .react-datepicker {
+  /* Style the calendar container within the portal */
+  font-size: 1.2rem !important; /* Increase base font size */
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  border: none;
+  position: relative; /* Ensure it doesn't inherit fixed positioning */
+  /* Optional: Set a max-width if needed */
+  /* max-width: 90vw; */
+}
+
+.react-datepicker__portal .react-datepicker__header {
+  /* Style the header (month/year, arrows) */
+  background-color: #a5f3fc !important; /* Light cyan background */
+  border-bottom: none;
+  padding-top: 15px;
+  padding-bottom: 10px;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.react-datepicker__portal .react-datepicker__current-month {
+  /* Style the month/year text */
+  font-size: 1.5rem !important; /* Larger month text */
+  font-weight: bold;
+  padding-bottom: 10px;
+  color: #0e7490; /* Darker cyan */
+}
+
+.react-datepicker__portal .react-datepicker__navigation {
+  /* Style the previous/next arrows */
+  top: 20px; /* Adjust vertical position */
+  width: 40px; /* Wider hit area */
+  height: 40px; /* Taller hit area */
+}
+
+.react-datepicker__portal .react-datepicker__navigation--previous {
+  border-right-color: #0e7490;
+}
+.react-datepicker__portal .react-datepicker__navigation--previous:hover {
+  border-right-color: #155e75;
+}
+
+.react-datepicker__portal .react-datepicker__navigation--next {
+  border-left-color: #0e7490;
+}
+.react-datepicker__portal .react-datepicker__navigation--next:hover {
+  border-left-color: #155e75;
+}
+
+.react-datepicker__portal .react-datepicker__day-name,
+.react-datepicker__portal .react-datepicker__day {
+  /* Style day names and individual days */
+  width: 3rem; /* Wider days */
+  line-height: 3rem; /* Taller days */
+  font-size: 1.1rem; /* Slightly larger day numbers */
+  margin: 0.3rem; /* More spacing */
+}
+
+.react-datepicker__portal .react-datepicker__day--selected,
+.react-datepicker__portal .react-datepicker__day--keyboard-selected {
+  /* Style the selected day */
+  background-color: #0ea5e9 !important; /* Sky blue */
+  color: white !important;
+  border-radius: 50%; /* Make it a circle */
+}
+
+.react-datepicker__portal .react-datepicker__day:hover {
+  background-color: #f0f9ff; /* Light blue hover */
+  border-radius: 50%;
+}
+
+.react-datepicker__portal .react-datepicker__day--outside-month {
+  color: #9ca3af; /* Dim days outside current month */
+}
