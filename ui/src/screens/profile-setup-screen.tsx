@@ -68,10 +68,17 @@ export function ProfileSetupScreen() {
   // Effect to sync keyboard state with external state changes
   useEffect(() => {
     if (inputFocus === 'name' && keyboardRef.current) {
-      // Use setInput to sync the keyboard's internal value
-      (keyboardRef.current as SimpleKeyboard).setInput(profileData.name);
+      // Use setInput inside setTimeout to ensure keyboard is ready
+      const timer = setTimeout(() => {
+        if (keyboardRef.current) { // Check ref again inside timeout
+           (keyboardRef.current as SimpleKeyboard).setInput(profileData.name);
+        }
+      }, 0); // 0ms delay pushes to end of event loop
+
+      // Cleanup function to clear timeout if component unmounts or dependencies change
+      return () => clearTimeout(timer);
     }
-  }, [profileData.name, inputFocus]);
+  }, [profileData.name, inputFocus]); // Dependencies remain the same
 
   // Handler for DatePicker change
   function handleBirthdayChange(date: Date | null) {
@@ -216,7 +223,6 @@ export function ProfileSetupScreen() {
               '{backspace}': '⌫'
             }}
             theme={"hg-theme-default hg-layout-default my-keyboard-theme"} 
-            syncInstanceInputs={true} 
             buttonTheme={[
               {
                 class: "shift-key", 
