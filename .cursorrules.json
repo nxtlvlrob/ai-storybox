@@ -8,6 +8,10 @@
   "docsDirs": ["docs"],
   "entryPoints": ["server/index.js", "ui/src/main.tsx"],
   "rules": {
-    "namingConvention": "lowercase-dashed"
+    "namingConvention": "lowercase-dashed",
+    "customInstructions": [
+      "Refer to docs/OVERVIEW.md for project architecture and goals.",
+      "Update docs/CHANGELOG.md with significant changes."
+    ]
   }
 } 
