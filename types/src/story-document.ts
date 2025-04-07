@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase/firestore'; // Or import from 'firebase-admi
 export interface StoryDocument {
     id: string;                       // Firestore document ID (usually added client-side after getting ref)
     userId: string;                   // ID of the user who created the story
+    title: string;                   // Story title
     topic: string | null;             // User-provided topic 
     originalPrompt: string | null;    // Full prompt if user provided one directly
     characterIds: string[];           // Array of character IDs selected

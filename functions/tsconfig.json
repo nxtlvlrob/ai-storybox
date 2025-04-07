@@ -4,29 +4,23 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
-    "rootDir": "src",
     "sourceMap": true,
     "strict": true,
     "target": "es2017",
     "baseUrl": ".",
     "paths": {
-      "@aistorytime/types/*": ["../types/lib/*"]
+      "@aistorytime/types/*": ["../types/src/*"]
     },
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true
+    "forceConsistentCasingInFileNames": true
   },
   "compileOnSave": true,
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "../types/src/**/*.ts"
   ],
   "exclude": [
     "node_modules", "lib"
-  ],
-  "references": [
-    { "path": "../types" }
   ]
 }
