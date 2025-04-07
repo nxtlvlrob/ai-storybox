@@ -8,9 +8,6 @@
     "strict": true,
     "target": "es2017",
     "baseUrl": ".",
-    "paths": {
-      "@aistorytime/types/*": ["../types/src/*"]
-    },
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
@@ -18,7 +15,7 @@
   "compileOnSave": true,
   "include": [
     "src/**/*.ts",
-    "../types/src/**/*.ts"
+    "../../types"
   ],
   "exclude": [
     "node_modules", "lib"

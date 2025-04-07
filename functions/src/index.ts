@@ -21,8 +21,8 @@ import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
 import { vertexAI, imagen3 } from '@genkit-ai/vertexai'; // Import Imagen model
 
 // Import types using the path alias
-import { StoryDocument, StoryStatus, StorySection } from "@aistorytime/types/story-document";
-import { Character } from "@aistorytime/types/character";
+import { StoryDocument, StoryStatus, StorySection } from "../../types";
+import { Character } from "../../types";
 
 // Firebase specific types
 export type StoryDocumentWriteData = Omit<StoryDocument, 'createdAt' | 'updatedAt'> & {
@@ -364,7 +364,7 @@ Write 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY w
 // === NEW: Generate Story Topics Callable Function ===
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { UserProfile } from "@aistorytime/types/user-profile"; // Import UserProfile type
+import { UserProfile } from "../../types"; // Import UserProfile type
 import { defineString } from "firebase-functions/params"; // << Import defineString
 
 // Define the structure for topic suggestions
