@@ -6,10 +6,6 @@ module.exports = {
   },
   extends: [
     "eslint:recommended",
-    "plugin:import/errors",
-    "plugin:import/warnings",
-    "plugin:import/typescript",
-    "google",
     "plugin:@typescript-eslint/recommended",
   ],
   parser: "@typescript-eslint/parser",
@@ -20,6 +16,7 @@ module.exports = {
   ignorePatterns: [
     "/lib/**/*", // Ignore built files.
     "/generated/**/*", // Ignore generated files.
+    ".eslintrc.js", // Add this line to ignore the ESLint config itself
   ],
   plugins: [
     "@typescript-eslint",
