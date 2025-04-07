@@ -17,12 +17,15 @@ import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 
 // Genkit Imports
 import { genkit } from "genkit";
-import { googleAI, gemini15Flash } from "@genkit-ai/googleai";
+import { googleAI, gemini20Flash } from "@genkit-ai/googleai";
 import { vertexAI, imagen3 } from "@genkit-ai/vertexai"; // Import Imagen model
 
 // Import types using the path alias
-import { StoryDocument, StoryStatus, StorySection } from "../../types";
+import { StoryDocument, StoryStatus, StorySection, UserProfile } from "../../types";
 import { Character } from "../../types";
+
+import { Resvg } from "@resvg/resvg-js";
+import { URL } from "url"; // Import the URL class from Node.js
 
 // Firebase specific types
 export type StoryDocumentWriteData = Omit<StoryDocument, "createdAt" | "updatedAt"> & {
@@ -41,6 +44,62 @@ const storage = admin.storage(); // Initialize storage for saving audio/images
 
 // Keep TTS Client initialization
 const ttsClient = new TextToSpeechClient();
+
+// Helper function to download SVG from a Storage URL and convert to PNG base64 string
+async function convertSvgUrlToPngBase64(svgUrl: string, storyId: string): Promise<string | null> {
+  let relativePath: string | null = null;
+  try {
+    logger.info(`[${storyId}] Starting SVG download and conversion for URL: ${svgUrl}`);
+
+    // 1. Parse the URL to extract the relative path
+    const parsedUrl = new URL(svgUrl);
+    // Example pathname: /v0/b/your-bucket-name.appspot.com/o/avatars%2Fuser_id%2Favatar.svg
+    const pathSegments = parsedUrl.pathname.split("/o/");
+    if (pathSegments.length < 2) {
+      throw new Error("Could not extract relative path from SVG URL pathname.");
+    }
+    // Get the URL-encoded path part after '/o/'
+    const encodedPath = pathSegments[1];
+    // Decode the path (e.g., 'avatars%2Fuser_id%2Favatar.svg' -> 'avatars/user_id/avatar.svg')
+    relativePath = decodeURIComponent(encodedPath);
+    logger.info(`[${storyId}] Extracted relative path: ${relativePath}`);
+
+    // 2. Get reference to the file using the relative path
+    const bucket = storage.bucket(); // Assumes default bucket
+    const file = bucket.file(relativePath);
+
+    // 3. Check if file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      logger.warn(`[${storyId}] SVG file not found at relative path: ${relativePath} (derived from URL: ${svgUrl})`);
+      return null;
+    }
+
+    // 4. Download the SVG file content
+    logger.info(`[${storyId}] Downloading SVG content from relative path: ${relativePath}...`);
+    const [svgBuffer] = await file.download();
+    const svgString = svgBuffer.toString("utf-8");
+    logger.info(`[${storyId}] SVG content downloaded (length: ${svgString.length}).`);
+
+    // 5. Use Resvg to convert the SVG string to PNG
+    const resvg = new Resvg(svgString, {
+      fitTo: { mode: "width", value: 512 },
+      font: { loadSystemFonts: false, defaultFontFamily: "sans-serif" },
+    });
+    const pngData = await resvg.render();
+    const pngBuffer = pngData.asPng();
+    logger.info(`[${storyId}] SVG converted to PNG buffer.`);
+
+    const pngBase64 = pngBuffer.toString("base64");
+    logger.info(`[${storyId}] PNG buffer encoded to base64 string (length: ${pngBase64.length}).`);
+    return pngBase64;
+
+  } catch (error) {
+    const pathInfo = relativePath ? `relative path ${relativePath}` : `URL ${svgUrl}`;
+    logger.error(`[${storyId}] Failed during SVG download or conversion for ${pathInfo}:`, error);
+    return null;
+  }
+}
 
 // === Main Cloud Function: Orchestrate Story Generation (Refactored with Genkit) ===
 
@@ -61,8 +120,9 @@ export const generateStoryPipeline = onDocumentCreated(
     const storyId = event.params.storyId;
     const storyData = snapshot.data() as StoryDocument;
     const storyRef = snapshot.ref;
+    const userId = storyData.userId;
 
-    logger.info(`[${storyId}] Genkit: Starting pipeline for user ${storyData.userId}...`);
+    logger.info(`[${storyId}] Genkit: Starting pipeline for user ${userId}...`);
 
     // Check initial status (Should be 'queued', set by UI)
     if (storyData.status !== "queued") {
@@ -91,10 +151,36 @@ export const generateStoryPipeline = onDocumentCreated(
       return; // Stop if status update fails
     }
 
-    // --- 2. Fetch Character Details (Keep existing logic) ---
+    // --- 2. Fetch Character Details AND User Profile ---
     let characters: Character[] = [];
-    if (storyData.characterIds && storyData.characterIds.length > 0) {
-      try {
+    let userProfile: UserProfile | null = null;
+    let actualPngBase64: string | null = null; // Variable to hold the final PNG base64
+
+    try {
+      logger.info(`[${storyId}] Fetching profile for user ${userId}...`);
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (userDoc.exists) {
+        userProfile = userDoc.data() as UserProfile;
+        logger.info(`[${storyId}] User profile fetched.`);
+        // Check if avatarUrl (containing the storage URL) exists
+        if (userProfile.avatarUrl) {
+          logger.info(`[${storyId}] Found avatarUrl (storage URL): ${userProfile.avatarUrl}`);
+          // *** Call the updated function with the storage URL ***
+          actualPngBase64 = await convertSvgUrlToPngBase64(userProfile.avatarUrl, storyId); // Use the renamed function
+          if (actualPngBase64) {
+            logger.info(`[${storyId}] Successfully converted SVG from storage URL to PNG base64.`);
+          } else {
+            logger.warn(`[${storyId}] Failed to convert SVG from storage URL to PNG base64.`);
+          }
+        } else {
+          logger.info(`[${storyId}] No avatarUrl field found in user profile.`);
+        }
+      } else {
+        logger.warn(`[${storyId}] User profile not found for ${userId}. Cannot fetch avatar.`);
+      }
+
+      // Fetch Characters (as before)
+      if (storyData.characterIds && storyData.characterIds.length > 0) {
         logger.info(`[${storyId}] Fetching details for characters: ${storyData.characterIds.join(", ")}`);
         const characterPromises = storyData.characterIds.map((id: string) =>
           db.collection("characters").doc(id).get()
@@ -107,19 +193,28 @@ export const generateStoryPipeline = onDocumentCreated(
           logger.warn(`[${storyId}] Some characters not found.`);
         }
         logger.info(`[${storyId}] Fetched ${characters.length} characters.`);
-      } catch (error) {
-        logger.error(`[${storyId}] Failed fetching characters:`, error);
-        await storyRef.update({
-          status: "error" as StoryStatus,
-          errorMessage: `Failed fetching characters: ${error instanceof Error ? error.message : String(error)}`,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return;
       }
+    } catch (error) {
+      logger.error(`[${storyId}] Failed fetching user profile or characters:`, error);
+      await storyRef.update({
+        status: "error" as StoryStatus,
+        errorMessage: `Setup failed: ${error instanceof Error ? error.message : String(error)}`,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
     }
+
     const characterDescriptions = characters.map((c) => `- ${c.name}: ${c.description}`).join("\n");
     const characterDetailsString = characters.map((c) => `${c.name} (${c.description})`).join(", ");
 
+    // Create clearer strings for prompt injection
+    const characterNames = characters.map((c) => c.name).join(", ");
+    const characterDescriptionsForPrompt = characters.map((c) => `- ${c.name}: ${c.description}`).join("\n"); // Detailed list for context
+    const characterMention = characters.length > 0 ? `Include the character(s) ${characterNames} in the story.` : "";
+    // Use characterDescriptionsForPrompt if actualPngBase64 is null
+    const characterVisualDescription = characters.length > 0 && !actualPngBase64
+      ? `Characters visually described as:\n${characterDescriptionsForPrompt}`
+      : ""; // Don't add text description if image is provided
 
     // --- 3. Generate Title and Plan (using Genkit) ---
     let title = "My Story"; // Default title
@@ -130,7 +225,7 @@ export const generateStoryPipeline = onDocumentCreated(
       // Generate Title
       const titlePrompt = `Create a short, catchy title (3-7 words) for a children's story about "${storyData.topic || "adventure"}". ${characters.length > 0 ? `Characters: ${characterDetailsString}` : ""}. Respond ONLY with the title text.`;
       const titleResult = await ai.generate({
-        model: gemini15Flash,
+        model: gemini20Flash,
         prompt: titlePrompt,
         config: { temperature: 0.7 },
       });
@@ -145,14 +240,14 @@ ${characterDescriptions}` : ""}
 Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON object containing a "plan" key with an array of strings. Example: {"plan": ["Scene 1...", "Scene 2..."]}`;
 
       const planResult = await ai.generate({
-        model: gemini15Flash,
+        model: gemini20Flash,
         prompt: planPrompt,
         output: { format: "json" }, // Request JSON
         config: { temperature: 0.7 },
       });
 
       // Genkit handles JSON parsing when format: 'json' is used
-      const parsedPlan = planResult.output();
+      const parsedPlan = planResult.output;
       if (parsedPlan?.plan && Array.isArray(parsedPlan.plan)) {
         plan = parsedPlan.plan.filter((item: unknown): item is string => typeof item === "string");
       } else {
@@ -203,28 +298,28 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
       return;
     }
 
-    // --- 5. Background Section Generation Loop ---
+    // --- 5. Background Section Generation Loop (Refactored) ---
     let previousText = "The story begins."; // Context for first section
-    const STYLE_LOCK = "Children's storybook illustration, simple, friendly, colorful."; // Image style guidance
+    // Update style lock with user request
+    const STYLE_LOCK = "Flat Illustrated with Texture (Adventure Time / Steven Universe Inspired), simple, friendly, colorful.";
 
     for (let index = 0; index < plan.length; index++) {
       const currentPlanItem = plan[index];
       let generatedText: string | null = null;
-      const sectionPathPrefix = `sections.${index}`; // For Firestore updates
+      let generatedImageUrl: string | null = null;
+      let generatedAudioUrl: string | null = null;
 
       // --- 5a. Generate Text ---
       try {
         const textStatus: StoryStatus = `generating_text_${index}`;
         logger.info(`[${storyId}] Updating status to '${textStatus}'`);
-        await storyRef.update({ status: textStatus });
+        await storyRef.update({ status: textStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        const textPrompt = `Continue the children's story titled "${title}". Scene: "${currentPlanItem}"
-Previous part: "${previousText}"
-Characters: ${characterDetailsString || "None specified"}
-Write 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY with the text for this section.`;
+        // Update text prompt to include character mention
+        const textPrompt = `Continue the children's story titled "${title}". Scene: "${currentPlanItem}"\nPrevious part: "${previousText}"\n${characterMention}\nWrite 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY with the text for this section.`;
 
         const textResult = await ai.generate({
-          model: gemini15Flash,
+          model: gemini20Flash,
           prompt: textPrompt,
           config: { temperature: 0.7, maxOutputTokens: 256 },
         });
@@ -233,11 +328,6 @@ Write 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY w
         if (!generatedText) throw new Error("Text generation failed (empty content).");
 
         previousText = generatedText; // Update context for next iteration
-        const textUpdateData = {
-          [`${sectionPathPrefix}.text`]: generatedText,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Update timestamp
-        };
-        await storyRef.update(textUpdateData);
         logger.info(`[${storyId}] Generated text for section ${index}.`);
       } catch (error) {
         logger.error(`[${storyId}] Text gen failed (sec ${index}):`, error);
@@ -253,85 +343,202 @@ Write 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY w
       try {
         const imageStatus: StoryStatus = `generating_image_${index}`;
         logger.info(`[${storyId}] Updating status to '${imageStatus}'`);
-        await storyRef.update({ status: imageStatus });
+        await storyRef.update({ status: imageStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // Use generated text for image prompt
-        const imagePrompt = `Children's storybook illustration, ${STYLE_LOCK}. Scene depicting: ${generatedText}. Characters: ${characterDetailsString || "None visible"}.`;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let imagePrompt: any;
+        const baseTextPrompt = `Illustration in a ${STYLE_LOCK} style. Scene depicting: ${generatedText}.`;
 
-        const imageResult = await ai.generate({
-          model: imagen3, // Use Imagen model
-          prompt: imagePrompt,
-          output: { format: "media" }, // Request media output
-          // Add specific Imagen config if needed (e.g., aspectRatio)
-          // config: { aspectRatio: "1:1", sampleCount: 1 }
-        });
-
-        // Access media directly as a property, checking for null/undefined
-        const media = imageResult.media;
-
-        // Check if media object and its url exist
-        if (!media || !media.url) {
-          throw new Error("Image generation failed (no media URL found).");
+        // Check if we successfully got PNG base64 data from the user profile SVG
+        if (actualPngBase64 && characters.length > 0) {
+          const characterName = characters[0].name;
+          const characterImagePart = {
+            inlineData: {
+              mimeType: "image/png",
+              data: actualPngBase64
+            }
+          };
+          imagePrompt = [
+            characterImagePart,
+            { text: `${baseTextPrompt}\nUse the provided image for the character named ${characterName}.` },
+          ];
+          logger.info(`[${storyId}] Using multimodal prompt with converted PNG avatar for section ${index}.`);
+        } else {
+          // Fallback to text-only prompt using descriptions
+          imagePrompt = `${baseTextPrompt}\n${characterVisualDescription}`;
+          logger.info(`[${storyId}] Using text-only image prompt for section ${index}. PNG Base64 available: ${!!actualPngBase64}, Characters: ${characters.length}`);
         }
 
-        // Use the URL provided by Genkit directly
-        const generatedImageUrl = media.url;
+        const imageResult = await ai.generate({
+          model: imagen3,
+          prompt: imagePrompt, // Pass the constructed prompt
+          output: { format: "media" },
+        });
 
-        logger.info(`[${storyId}] Image URL obtained for section ${index}: ${generatedImageUrl}`);
-        const imageUpdateData = {
-          [`${sectionPathPrefix}.imageUrl`]: generatedImageUrl,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
-        await storyRef.update(imageUpdateData);
+        logger.debug(`[${storyId}] Full imageResult.media object for section ${index}: ${JSON.stringify(imageResult?.media, null, 2)}`);
+
+        const media = imageResult.media;
+
+        // Validate the media response
+        if (!media || typeof media.url !== "string" || media.url.trim() === "") {
+          logger.error(`[${storyId}] Image generation failed for section ${index}. Reason: Invalid or missing media.url. Response: ${JSON.stringify(imageResult)}`);
+          throw new Error("Image generation failed (invalid media URL received).");
+        }
+
+        const potentialUrl = media.url;
+
+        // Check if the result is a data URI or a GCS URL
+        if (potentialUrl.startsWith("data:image/png;base64,")) {
+          logger.warn(`[${storyId}] Image generation returned a base64 data URI for section ${index}. Uploading to GCS...`);
+
+          // Extract base64 data
+          const base64Data = potentialUrl.replace(/^data:image\/png;base64,/, "");
+          const imageBuffer = Buffer.from(base64Data, "base64");
+
+          // Define GCS path
+          const imagePath = `stories/${storyId}/images/section_${index}.png`;
+          const imageFile = storage.bucket().file(imagePath);
+
+          // Upload the image buffer to GCS
+          logger.info(`[${storyId}] Uploading base64 image to ${imagePath}...`);
+          await imageFile.save(imageBuffer, { metadata: { contentType: "image/png" } });
+          await imageFile.makePublic();
+          generatedImageUrl = imageFile.publicUrl(); // Store the GCS URL
+
+          logger.info(`[${storyId}] Base64 image successfully uploaded for section ${index}. URL: ${generatedImageUrl}`);
+
+        } else if (potentialUrl.startsWith("https://") || potentialUrl.startsWith("http://")) {
+          // Assume it's a standard URL (hopefully a GCS one)
+          generatedImageUrl = potentialUrl; // Assign the URL directly
+          logger.info(`[${storyId}] Image URL obtained directly for section ${index}: ${generatedImageUrl}`);
+        } else {
+          // URL format is unrecognized
+          logger.error(`[${storyId}] Image generation failed for section ${index}. Reason: Received URL is not a data URI or a standard HTTP(S) URL. URL: ${potentialUrl}`);
+          throw new Error("Image generation failed (unrecognized URL format).");
+        }
+
       } catch (error) {
-        logger.error(`[${storyId}] Image gen/upload failed (sec ${index}):`, error);
+        logger.error(`[${storyId}] Image gen failed (sec ${index}):`, error);
+        // Ensure error message includes the actual error if possible
+        const errorMessage = error instanceof Error ? error.message : String(error);
         await storyRef.update({
           status: "error" as StoryStatus,
-          errorMessage: `Image generation failed (section ${index}): ${error instanceof Error ? error.message : String(error)}`,
+          errorMessage: `Image generation failed (section ${index}): ${errorMessage}`,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         return; // Stop processing
       }
 
-      // --- 5c. Generate Audio (Keep using TTS Client) ---
+      // --- 5c. Generate Audio ---
       try {
         const audioStatus: StoryStatus = `generating_audio_${index}`;
         logger.info(`[${storyId}] Updating status to '${audioStatus}'`);
-        await storyRef.update({ status: audioStatus });
+        await storyRef.update({ status: audioStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        if (generatedText) {
-          const ttsRequest = {
-            input: { text: generatedText },
-            voice: { languageCode: "en-US", name: "en-US-Standard-C", ssmlGender: "NEUTRAL" as const },
-            audioConfig: { audioEncoding: "MP3" as const },
-          };
-
-          const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
-          if (!ttsResponse.audioContent) throw new Error("TTS returned no audio content.");
-
-          // Upload audio to GCS
-          const audioPath = `stories/${storyId}/audio/section_${index}.mp3`;
-          const audioFile = storage.bucket().file(audioPath);
-          await audioFile.save(ttsResponse.audioContent as Buffer, { metadata: { contentType: "audio/mpeg" } });
-          await audioFile.makePublic();
-          const generatedAudioUrl = audioFile.publicUrl();
-
-          logger.info(`[${storyId}] Audio uploaded for section ${index}: ${generatedAudioUrl}`);
-          const audioUpdateData = {
-            [`${sectionPathPrefix}.audioUrl`]: generatedAudioUrl,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          };
-          await storyRef.update(audioUpdateData);
-        } else {
-          logger.warn(`[${storyId}] Skipping audio gen (sec ${index}): missing text.`);
-          // Optionally update the section to indicate skipped audio?
-          // await storyRef.update({ [`${sectionPathPrefix}.audioUrl`]: 'skipped' });
+        // Use generated text (must exist)
+        if (!generatedText) {
+          // Added safety check, though theoretically unreachable if 5a succeeded
+          throw new Error("Cannot generate audio, generatedText is unexpectedly null.");
         }
+
+        // **Updated TTS Request Configuration**
+        const ttsRequest = {
+          input: { text: generatedText },
+          // Updated Voice selection
+          voice: {
+            languageCode: "en-US",
+            name: "en-US-Chirp3-HD-Achernar", // New voice name
+          },
+          // Updated Audio Configuration
+          audioConfig: {
+            audioEncoding: "LINEAR16" as const, // New encoding
+            effectsProfileId: ["small-bluetooth-speaker-class-device"], // Added effects profile
+            pitch: 0, // Added pitch
+            speakingRate: 1, // Added speaking rate
+          },
+        };
+        logger.info(`[${storyId}] Sending TTS request for section ${index} with config: ${JSON.stringify(ttsRequest)}`); // Log the request config
+
+        const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
+        if (!ttsResponse.audioContent) throw new Error("TTS returned no audio content.");
+        logger.info(`[${storyId}] TTS response received for section ${index}. Content length: ${ttsResponse.audioContent.length}`);
+
+        // Upload audio to GCS - **Update path and content type for WAV**
+        const audioPath = `stories/${storyId}/audio/section_${index}.wav`; // Changed extension to .wav
+        const audioFile = storage.bucket().file(audioPath);
+        logger.info(`[${storyId}] Uploading audio content to ${audioPath}...`);
+        await audioFile.save(ttsResponse.audioContent as Buffer, { metadata: { contentType: "audio/wav" } }); // Changed contentType to audio/wav
+        await audioFile.makePublic();
+        generatedAudioUrl = audioFile.publicUrl(); // Store the URL
+
+        logger.info(`[${storyId}] Audio successfully uploaded for section ${index}. URL: ${generatedAudioUrl}`);
       } catch (error) {
-        logger.error(`[${storyId}] Audio gen/upload failed (sec ${index}):`, error);
+        // **More detailed error logging for TTS**
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error(`[${storyId}] Audio gen/upload failed (sec ${index}): ${errorMessage}`, { error }); // Log the full error object
         await storyRef.update({
           status: "error" as StoryStatus,
-          errorMessage: `Audio generation failed (section ${index}): ${error instanceof Error ? error.message : String(error)}`,
+          errorMessage: `Audio generation failed (section ${index}): ${errorMessage}`,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return; // Stop processing
+      }
+
+      // --- 5d. Consolidated Section Update (Read-Modify-Write) ---
+      try {
+        logger.info(`[${storyId}] Updating section ${index} data in Firestore...`);
+        const currentDoc = await storyRef.get();
+        if (!currentDoc.exists) {
+          throw new Error("Document unexpectedly deleted during processing.");
+        }
+        const currentData = currentDoc.data() as StoryDocument;
+        // Ensure sections is treated as an array, create a mutable copy
+        const updatedSections = Array.isArray(currentData.sections) ? [...currentData.sections] : [];
+
+        // Check if the index is valid for the array fetched from Firestore
+        if (index >= updatedSections.length || !updatedSections[index]) {
+          // This indicates a serious inconsistency, as the array should have been
+          // initialized with placeholders for all plan items earlier.
+          logger.error(`[${storyId}] Consistency Error: Section ${index} is missing or invalid in the 'sections' array read from Firestore. Expected length based on plan: ${plan.length}, Actual length: ${updatedSections.length}.`);
+          // Throw an error to halt processing, as the state is unexpected.
+          throw new Error(`Inconsistent state: Section ${index} not found in Firestore document.`);
+        }
+
+        // Prepare the updated section data
+        // Ensure all values are either strings or null, defaulting to null if undefined/empty.
+        const updatedSectionData: StorySection = {
+          ...updatedSections[index], // Keep existing fields like planItem, index
+          text: typeof generatedText === "string" && generatedText.trim() !== "" ? generatedText.trim() : null,
+          imageUrl: typeof generatedImageUrl === "string" && generatedImageUrl.trim() !== "" ? generatedImageUrl.trim() : null,
+          audioUrl: typeof generatedAudioUrl === "string" && generatedAudioUrl.trim() !== "" ? generatedAudioUrl.trim() : null,
+        };
+
+        // **Detailed Logging:** Log the exact object before attempting the update.
+        // Use JSON.stringify to handle potential complex objects or undefined values safely in logs.
+        // Using logger.debug for potentially verbose output. Ensure your Function log level captures debug messages if needed.
+        logger.debug(`[${storyId}] Preparing to update Firestore for section ${index}. Data being assigned: ${JSON.stringify(updatedSectionData, null, 2)}`);
+
+        // Assign the validated & logged data back to the array copy
+        updatedSections[index] = updatedSectionData;
+
+        // Log the whole array structure briefly (optional, can be large)
+        logger.debug(`[${storyId}] Full sections array structure before update (index ${index}): ${JSON.stringify(updatedSections.map(s => ({ index: s.index, hasText: !!s.text, hasImg: !!s.imageUrl, hasAudio: !!s.audioUrl })), null, 2)}`);
+
+
+        // Write the entire modified array back to Firestore
+        await storyRef.update({
+          sections: updatedSections, // Overwrite the entire array with the modified copy
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        logger.info(`[${storyId}] Successfully updated section ${index} data in Firestore.`);
+
+      } catch (error) {
+        // Log the specific error from Firestore
+        logger.error(`[${storyId}] Failed updating section ${index} data in Firestore:`, error);
+        // Update Firestore with error status (existing logic)
+        await storyRef.update({
+          status: "error" as StoryStatus,
+          errorMessage: `Failed saving section ${index} data: ${error instanceof Error ? error.message : String(error)}`,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         return; // Stop processing
@@ -359,7 +566,6 @@ Write 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY w
 // === NEW: Generate Story Topics Callable Function ===
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { UserProfile } from "../../types"; // Import UserProfile type
 import { defineString } from "firebase-functions/params"; // << Import defineString
 
 // Define the structure for topic suggestions
@@ -433,7 +639,7 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
   // 5. Generate Topics using Genkit
   try {
     const result = await ai.generate({
-      model: gemini15Flash, // Specify the model
+      model: gemini20Flash, // Specify the model
       prompt: prompt,
       config: { temperature: 0.8 }, // Adjust temperature for creativity
       output: { format: "json" }, // Request JSON output directly

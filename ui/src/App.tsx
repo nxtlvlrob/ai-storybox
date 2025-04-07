@@ -12,6 +12,7 @@ import { HomeScreen } from './screens/home-screen'
 import { CreateStoryScreen } from './screens/create-story-screen'
 import { MyStoriesScreen } from './screens/my-stories-screen'
 import { SettingsScreen } from './screens/settings-screen'
+import { StoryViewerScreen } from './screens/story-viewer-screen'
 
 // --- Main App Component --- 
 
@@ -54,6 +55,7 @@ function App() {
           <Route path="/home" element={<HomeScreen />} />
           <Route path="/create-story" element={<CreateStoryScreen />} />
           <Route path="/my-stories" element={<MyStoriesScreen />} />
+          <Route path="/stories/:storyId" element={<StoryViewerScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/setup-profile" element={<Navigate to="/home" replace />} />
