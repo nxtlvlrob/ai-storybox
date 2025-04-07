@@ -4,6 +4,7 @@ import DatePicker from 'react-datepicker'
 import Keyboard, { SimpleKeyboard } from 'react-simple-keyboard'
 import { useAuth } from '../context/auth-context'
 import { updateUserProfile } from '../services/firestore-service'
+import { useProfile } from '../context/profile-context'
 
 import 'react-datepicker/dist/react-datepicker.css'
 import 'react-simple-keyboard/build/css/index.css'
@@ -18,6 +19,7 @@ interface ProfileData {
 export function ProfileSetupScreen() {
   const navigate = useNavigate()
   const { currentUser } = useAuth()
+  const { refreshProfile } = useProfile()
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [profileData, setProfileData] = useState<ProfileData>({
@@ -125,7 +127,9 @@ export function ProfileSetupScreen() {
 
     try {
       await updateUserProfile(currentUser.uid, dataToSave);
-      console.log('Profile data saved, navigating to avatar setup...');
+      console.log('Profile data saved.');
+      await refreshProfile(); // Refresh the context data
+      console.log('Profile context refreshed, navigating...');
       navigate('/setup-avatar');
     } catch (error) {
       console.error("Failed to save profile data:", error);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { createAvatar } from '@dicebear/core';
 import * as adventurerCollection from '@dicebear/adventurer';
 import { useAuth } from '../context/auth-context';
+import { useProfile } from '../context/profile-context';
 import { updateUserProfile, uploadAvatarSvg } from '../services/firestore-service';
 
 // Define available options (based on documentation, limited selection for UI)
@@ -36,6 +37,7 @@ function cycleIndex(currentIndex: number, arrayLength: number, direction: 'next'
 export function AvatarCreationScreen() {
   const navigate = useNavigate()
   const { currentUser } = useAuth();
+  const { refreshProfile } = useProfile();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [options, setOptions] = useState<AvatarOptions>({
@@ -150,7 +152,9 @@ export function AvatarCreationScreen() {
           avatarUrl: uploadedAvatarUrl 
       });
 
-      console.log('Avatar SVG uploaded and profile updated, navigating...');
+      console.log('Avatar SVG uploaded and profile updated.');
+      await refreshProfile(); // Refresh the context data
+      console.log('Profile context refreshed, navigating...');
       navigate('/setup-confirm');
 
     } catch (error) {

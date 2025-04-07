@@ -4,7 +4,7 @@
 
 ## 🧱 Architecture
 
-The project is divided into three main parts:
+The project is divided into several main parts:
 
 1.  **`/ui`**: The React frontend responsible for the user interface.
     *   Built with TypeScript and styled with Tailwind CSS.
@@ -13,18 +13,21 @@ The project is divided into three main parts:
     *   Communicates with the `/server` via a REST API.
     *   Designed for offline-first operation.
 
-2.  **`/server`**: The Express backend acting as the local server.
+2.  **`/server`**: The Express backend acting as the local server (if used, otherwise Firebase handles backend).
     *   Built with TypeScript.
     *   Serves the React `/ui` application.
     *   Provides REST API endpoints (e.g., `/api/profile`, `/api/story`, `/api/settings`).
     *   Manages local data storage (e.g., user profiles, generated stories using JSON or SQLite).
     *   Routes requests requiring cloud interaction (like AI generation or Firestore sync) to `/functions`.
 
-3.  **`/functions`**: Cloud functions (e.g., Firebase Cloud Functions).
+3.  **`/functions`**: Firebase Cloud Functions handling backend logic.
     *   Built with TypeScript.
-    *   Handles optional Firestore synchronization for user profiles and stories.
+    *   Handles Firestore database operations (user profiles, stories).
     *   Manages AI story generation requests (e.g., interfacing with OpenAI/Gemini/Claude).
-    *   Returns generated content or sync status back to the `/server`.
+    *   Handles Cloud Storage uploads (avatars, story audio/images).
+    *   Returns generated content or sync status back to the `/ui` app (directly or via Firestore listeners).
+
+4.  **`/types`**: Contains shared TypeScript type definitions used across different project parts (`/ui`, `/functions`, `/server`) to ensure consistency.
 
 ## 🚀 Key Features
 

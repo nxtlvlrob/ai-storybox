@@ -7,7 +7,7 @@ import { updateUserProfile } from '../services/firestore-service'
 export function ConfirmationScreen() {
   const navigate = useNavigate()
   const { currentUser } = useAuth()
-  const { userProfile, profileLoading } = useProfile()
+  const { userProfile, profileLoading, refreshProfile } = useProfile()
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -27,7 +27,9 @@ export function ConfirmationScreen() {
     try {
       // Update profile to mark onboarding as complete
       await updateUserProfile(currentUser.uid, { onboardingComplete: true })
-      console.log('Onboarding marked complete, navigating home...')
+      console.log('Onboarding marked complete.')
+      await refreshProfile()
+      console.log('Profile context refreshed, navigating home...')
       navigate('/home')
     } catch (error) {
       console.error("Failed to mark onboarding complete:", error)

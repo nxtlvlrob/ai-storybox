@@ -3,7 +3,7 @@
   "frameworks": ["React", "Node.js", "Express", "Tailwind CSS", "Vite"],
   "languages": ["TypeScript", "JavaScript", "Markdown"],
   "packageManager": "npm",
-  "sourceDirs": ["ui/src", "server"],
+  "sourceDirs": ["ui/src", "server", "functions/src", "types"],
   "testDirs": ["ui/src/__tests__", "server/__tests__"],
   "docsDirs": ["docs"],
   "entryPoints": ["server/index.js", "ui/src/main.tsx"],
@@ -11,7 +11,9 @@
     "namingConvention": "lowercase-dashed",
     "customInstructions": [
       "Refer to docs/OVERVIEW.md for project architecture and goals.",
-      "Update docs/CHANGELOG.md with significant changes."
+      "Update docs/CHANGELOG.md with significant changes.",
+      "Place shared data structure types (e.g., Firestore documents) in the root /types directory.",
+      "Import shared types from the /types directory instead of defining locally."
     ]
   }
 } 

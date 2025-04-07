@@ -1,11 +1,13 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useAuth } from './auth-context'; // To get the current user
-import { getUserProfile, UserProfile } from '../services/firestore-service'; // To fetch profile
+import { getUserProfile } from '../services/firestore-service'; // To fetch profile
+import { UserProfile } from '../../../types/user-profile'; // Update path
 
 interface ProfileContextType {
   userProfile: UserProfile | null;
   profileLoading: boolean;
   profileError: Error | null;
+  refreshProfile: () => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -28,37 +30,44 @@ export function ProfileProvider({ children }: ProfileProviderProps) {
   const [profileLoading, setProfileLoading] = useState<boolean>(true);
   const [profileError, setProfileError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    // Fetch profile when currentUser is available
-    if (currentUser?.uid) {
-      setProfileLoading(true);
-      setProfileError(null);
-      console.log(`ProfileProvider: User ${currentUser.uid} detected. Fetching profile...`);
-      getUserProfile(currentUser.uid)
-        .then(profile => {
-          console.log("ProfileProvider: Profile data received:", profile);
-          setUserProfile(profile); // Set profile (null if not found)
-        })
-        .catch(err => {
-          console.error("ProfileProvider: Error fetching profile:", err);
-          setProfileError(err as Error);
-          setUserProfile(null); // Clear profile on error
-        })
-        .finally(() => {
-          setProfileLoading(false);
-        });
-    } else {
-      // No user, reset profile state
+  // Memoize the fetch function using useCallback
+  const fetchProfile = useCallback(async () => {
+    if (!currentUser?.uid) {
       setUserProfile(null);
       setProfileLoading(false);
       setProfileError(null);
+      return; // Exit if no user ID
     }
-  }, [currentUser]); // Re-run when currentUser changes
+
+    setProfileLoading(true);
+    setProfileError(null);
+    console.log(`ProfileProvider: Fetching profile for ${currentUser.uid}...`);
+    try {
+      const profile = await getUserProfile(currentUser.uid);
+      console.log("ProfileProvider: Profile data received:", profile);
+      setUserProfile(profile);
+    } catch (err) {
+      console.error("ProfileProvider: Error fetching profile:", err);
+      setProfileError(err as Error);
+      setUserProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [currentUser]); // Depend on currentUser
+
+  // Initial fetch on currentUser change
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]); // Depend on the memoized fetch function
+
+  // Expose refresh function (which is just fetchProfile)
+  const refreshProfile = fetchProfile;
 
   const value: ProfileContextType = {
     userProfile,
     profileLoading,
     profileError,
+    refreshProfile, // Expose the refresh function
   };
 
   // Provide the context value to children
