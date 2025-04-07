@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { createAvatar } from '@dicebear/core';
 import * as adventurerCollection from '@dicebear/adventurer';
 import { useAuth } from '../context/auth-context';
-import { updateUserProfile } from '../services/firestore-service';
+import { updateUserProfile, uploadAvatarSvg } from '../services/firestore-service';
 
 // Define available options (based on documentation, limited selection for UI)
 const hairStyles = ['short01', 'short02', 'short03', 'short04', 'short05', 'long01', 'long02', 'long03', 'long04', 'long05'];
@@ -120,32 +120,41 @@ export function AvatarCreationScreen() {
       setSaveError("Not authenticated. Cannot save avatar.");
       return;
     }
+    if (!avatarSvg) { // Check if SVG generation failed earlier
+        setSaveError("Avatar generation failed. Please try again.");
+        return;
+    }
 
     setIsSaving(true);
     setSaveError(null);
 
-    // Construct the final options used to generate the *current* avatar
+    // Construct the seed from current options (as before)
     const selectedGlasses = glassesStyles[options.glassesStyleIndex];
     const currentAvatarOptions = {
-      skinColor: skinColors[options.skinColorIndex],
-      hairColor: hairColors[options.hairColorIndex],
-      hair: hairStyles[options.hairStyleIndex],
-      eyes: eyeStyles[options.eyeStyleIndex],
-      mouth: mouthStyles[options.mouthStyleIndex],
-      glasses: selectedGlasses === 'none' ? undefined : selectedGlasses,
-      // We don't need size or probability here, just the *choices*
+        skinColor: skinColors[options.skinColorIndex],
+        hairColor: hairColors[options.hairColorIndex],
+        hair: hairStyles[options.hairStyleIndex],
+        eyes: eyeStyles[options.eyeStyleIndex],
+        mouth: mouthStyles[options.mouthStyleIndex],
+        glasses: selectedGlasses === 'none' ? undefined : selectedGlasses,
     };
-
-    // Create a seed string from the chosen options for reproducibility
-    // (Simple JSON stringify is one way, could use a more stable hash later)
     const avatarSeed = JSON.stringify(currentAvatarOptions);
 
     try {
-      await updateUserProfile(currentUser.uid, { avatarSeed: avatarSeed });
-      console.log('Avatar seed saved, navigating to confirmation...');
+      // 1. Upload the generated SVG string to Storage
+      const uploadedAvatarUrl = await uploadAvatarSvg(currentUser.uid, avatarSvg);
+
+      // 2. Update the user profile with the seed and the storage URL
+      await updateUserProfile(currentUser.uid, { 
+          avatarSeed: avatarSeed, 
+          avatarUrl: uploadedAvatarUrl 
+      });
+
+      console.log('Avatar SVG uploaded and profile updated, navigating...');
       navigate('/setup-confirm');
+
     } catch (error) {
-      console.error("Failed to save avatar seed:", error);
+      console.error("Failed to upload avatar or update profile:", error);
       setSaveError("Could not save avatar. Please try again.");
     } finally {
       setIsSaving(false);

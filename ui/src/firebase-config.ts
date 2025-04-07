@@ -1,6 +1,7 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 // TODO: Add imports for Firestore, Storage etc. when needed
 // import { getStorage } from "firebase/storage";
 
@@ -20,12 +21,14 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
-  console.log("Firebase initialized successfully (Auth, Firestore).");
+  storage = getStorage(app);
+  console.log("Firebase initialized successfully (Auth, Firestore, Storage).");
 } catch (error) {
   console.error("Error initializing Firebase:", error);
   // Handle initialization error appropriately
@@ -34,4 +37,4 @@ try {
 }
 
 // Export the initialized services
-export { app, auth, db }; 
+export { app, auth, db, storage }; 
