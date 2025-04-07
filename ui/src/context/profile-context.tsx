@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useAuth } from './auth-context'; // To get the current user
-import { getUserProfile } from '../services/firestore-service'; // To fetch profile
-import { UserProfile } from '../../../types/user-profile'; // Update path
+import { getUserProfile, UserProfile } from '../services/firestore-service'; // To fetch profile
 
 interface ProfileContextType {
   userProfile: UserProfile | null;

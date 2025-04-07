@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import { Character } from './character';
-import { StoryLength } from '@aistorytime/types';
+import { StoryLength } from './story-document';
 
 // Interface for a single section within a story
 export interface StorySectionData {

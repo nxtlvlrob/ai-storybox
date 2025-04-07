@@ -1,8 +1,20 @@
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"; 
+import { doc, setDoc, getDoc, serverTimestamp, Timestamp, FieldValue } from "firebase/firestore"; 
 import { ref, uploadString, getDownloadURL, StorageReference } from "firebase/storage"; // Import storage functions
 import { db, storage } from "../firebase-config"; // Import db and storage
-// Corrected relative path for UserProfile
-import { UserProfile } from "../../../types/user-profile"; 
+
+// Define the structure of the user profile document
+export interface UserProfile {
+    uid: string; // Matches auth uid
+    name: string;
+    birthday: Date | null;
+    gender?: 'boy' | 'girl';
+    avatarSeed?: string; // Store the seed used to generate the avatar
+    avatarUrl?: string; // Add field for storage URL
+    // avatarOptions?: object; // Or store the full options object if preferred
+    createdAt: Timestamp | FieldValue; // Use specific Firestore types
+    onboardingComplete: boolean;
+    // Add other fields as needed (e.g., likes, dislikes)
+}
 
 /**
  * Creates or updates a user's profile document in Firestore.
