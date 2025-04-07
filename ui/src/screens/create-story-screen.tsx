@@ -4,6 +4,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 // Firebase Imports for Firestore and Auth
 import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+// Import Twemoji
+import Twemoji from 'react-twemoji';
 
 // Define the structure for topic suggestions (matching the backend)
 interface TopicSuggestion {
@@ -176,13 +178,15 @@ export function CreateStoryScreen() {
               <button 
                 key={index} 
                 onClick={() => handleSelectTopic(topic)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg shadow-md transition duration-200 ease-in-out focus:outline-none h-24 sm:h-24 text-center ${
+                className={`flex flex-col items-center justify-center p-2 rounded-lg shadow-md transition duration-200 ease-in-out focus:outline-none h-24 sm:h-22 text-center ${
                   isSelected 
                     ? 'bg-green-500 text-white ring-2 ring-offset-2 ring-green-400' 
                     : 'bg-purple-500 text-white hover:bg-purple-600 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-75'
                 }`}
               >
-                <span className="text-3xl sm:text-4xl mb-1 sm:mb-2">{topic.emojis}</span>
+                <Twemoji options={{ className: 'twemoji' }} tag="div" className="mb-1 sm:mb-2 flex items-center justify-center gap-x-1 [&>img]:w-8 [&>img]:h-8 sm:[&>img]:w-10 sm:[&>img]:h-10">
+                  {topic.emojis}
+                </Twemoji>
                 <span className="text-xs sm:text-sm font-medium">{topic.text}</span>
               </button>
             );
