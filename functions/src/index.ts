@@ -417,13 +417,14 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
   const age = userProfile.birthday ? Math.floor((Date.now() - (userProfile.birthday as any).toDate().getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 5; // Example age calculation
   const gender = userProfile.gender || "child"; // Default if gender not set
   // Update prompt to ask for text and emojis in a specific JSON structure
-  const prompt = `Suggest 8 simple, creative, and fun story topics suitable for a ${age}-year-old ${gender}.
-    Topics should be 1-5 words long.
-    For each topic, provide the text and a string with 1-2 relevant emojis.
-    Return the topics ONLY as a JSON array of objects, where each object has a "text" key (string) and an "emojis" key (string).
-    Example: [
+  const prompt = `Suggest 9 simple, creative, and fun story *ideas* or *titles* suitable for a ${age}-year-old ${gender}.
+    Each suggestion should be a short phrase (1-6 words) that hints at a story, not just a description. For example, "The adventurous little star" is better than "A little star".
+    For each suggestion, provide the text and a string with 1-2 relevant emojis.
+    Return the suggestions ONLY as a JSON array of objects, where each object has a "text" key (string) and an "emojis" key (string).
+    Example format: [
       {"text": "A talking squirrel's big secret", "emojis": "🐿️🤫"},
       {"text": "The magical paintbrush", "emojis": "🖌️✨"},
+      {"text": "The day the crayons quit", "emojis": "🖍️😠"},
       {"text": "Lost in the candy kingdom", "emojis": "🍬👑"}
     ]`;
 
