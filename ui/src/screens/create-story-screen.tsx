@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 export function CreateStoryScreen() {
   const navigate = useNavigate()
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-indigo-100 p-4">
+    <div className="flex flex-col items-center justify-center h-screen bg-indigo-100">
       <h1 className="text-3xl font-bold mb-4">Create a New Story</h1>
       {/* TODO: Add theme/preference selection */}
       <p className="mb-6">Let's imagine something wonderful!</p>
