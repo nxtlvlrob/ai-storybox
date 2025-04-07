@@ -16,8 +16,8 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 
 // Import types using the path alias
-import { StoryDocument, StoryStatus, StorySection } from "../../types/story-document";
-import { Character } from "../../types/character";
+import { StoryDocument, StoryStatus, StorySection } from "@aistorytime/types/story-document";
+import { Character } from "@aistorytime/types/character";
 
 // Firebase specific types
 export type StoryDocumentWriteData = Omit<StoryDocument, 'createdAt' | 'updatedAt'> & {

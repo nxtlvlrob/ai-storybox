@@ -1,0 +1,8 @@
+{
+  "files": [], // This tsconfig doesn't compile files itself
+  "include": [], // Keep include empty
+  "references": [
+    { "path": "./types" }, // Reference the types project
+    { "path": "./functions" } // Reference the functions project
+  ]
+} 

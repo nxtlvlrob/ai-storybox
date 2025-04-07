@@ -1,0 +1,6 @@
+# TypeScript output
+lib/
+
+# Compiled JS files (if any)
+*.js
+*.js.map 

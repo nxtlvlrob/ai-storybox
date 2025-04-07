@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    /* Base Options: */
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "es2017",
+    "forceConsistentCasingInFileNames": true,
+    "module": "commonjs", 
+    "strict": true,
+
+    /* Project Reference Options: */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true, 
+
+    /* Output Structure Options: */
+    "outDir": "lib",
+    "rootDir": ".",   
+
+    /* Type Checking Options: */
+    "noImplicitReturns": true,
+    "noUnusedLocals": true
+  },
+  "include": [
+    "index.ts",
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib"
+  ]
+} 

@@ -1,6 +1,4 @@
 import { Timestamp } from 'firebase/firestore';
-import { Character } from './character';
-import { StoryLength } from './story-document';
 
 // Interface for a single section within a story
 export interface StorySectionData {
@@ -59,3 +57,8 @@ export interface Story {
     createdAt: Timestamp;
     updatedAt?: Timestamp;
 } 
+
+/**
+ * Represents the possible lengths for a generated story.
+ */
+export type StoryLength = 'short' | 'medium' | 'long'; 

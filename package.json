@@ -3,9 +3,5 @@
     "@google-cloud/aiplatform": "^4.1.0",
     "@google-cloud/text-to-speech": "^6.0.1",
     "firebase": "^11.6.0"
-  },
-  "compilerOptions": {
-    "outDir": "./lib",
-    "rootDir": "./src"
   }
 }
