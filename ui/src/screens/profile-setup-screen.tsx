@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DatePicker from 'react-datepicker'
 import Keyboard, { SimpleKeyboard } from 'react-simple-keyboard'
+import { useAuth } from '../context/auth-context'
+import { updateUserProfile } from '../services/firestore-service'
 
 import 'react-datepicker/dist/react-datepicker.css'
 import 'react-simple-keyboard/build/css/index.css'
@@ -15,6 +17,9 @@ interface ProfileData {
 
 export function ProfileSetupScreen() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth()
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [profileData, setProfileData] = useState<ProfileData>({
     name: '',
     birthday: null, // Initialize birthday as null
@@ -97,12 +102,37 @@ export function ProfileSetupScreen() {
     setInputFocus(null); // Hide keyboard when skipping gender
   }
 
-  // TODO: Add form validation
-  function handleNextClick() {
-    setInputFocus(null); // Ensure keyboard is hidden before navigating
-    console.log('Profile Data:', profileData); 
-    // TODO: Persist data
-    navigate('/setup-avatar');
+  // Update handleNextClick to save data
+  async function handleNextClick() {
+    if (!currentUser) {
+      setSaveError("Not authenticated. Cannot save profile.");
+      return;
+    }
+    if (!profileData.name || !profileData.birthday) {
+        setSaveError("Please enter your name and birthday.");
+        return;
+    }
+
+    setInputFocus(null); 
+    setIsSaving(true);
+    setSaveError(null);
+
+    const dataToSave = {
+      name: profileData.name,
+      birthday: profileData.birthday, 
+      gender: profileData.gender, // Will be undefined if skipped
+    };
+
+    try {
+      await updateUserProfile(currentUser.uid, dataToSave);
+      console.log('Profile data saved, navigating to avatar setup...');
+      navigate('/setup-avatar');
+    } catch (error) {
+      console.error("Failed to save profile data:", error);
+      setSaveError("Could not save profile. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -179,15 +209,20 @@ export function ProfileSetupScreen() {
             </div>
           </div>
 
+          {/* Display Save Error */}
+          {saveError && (
+            <p className="text-sm text-red-600 text-center mt-2">{saveError}</p>
+          )}
+
         </div>
         
-        {/* Navigation Button */}
-         {/* Reduced margin, padding, text size */} 
+        {/* Navigation Button - Updated text/disabled state */}
          <button 
-          className="mt-5 mb-2 self-center px-6 py-2 bg-blue-500 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100"
+          className="mt-5 mb-2 self-center px-6 py-2 bg-blue-500 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleNextClick}
+          disabled={isSaving} // Disable while saving
         >
-          Next: Create Avatar
+          {isSaving ? 'Saving...' : 'Next: Create Avatar'} 
         </button>
       </div>
 

@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createAvatar } from '@dicebear/core';
 import * as adventurerCollection from '@dicebear/adventurer';
+import { useAuth } from '../context/auth-context';
+import { updateUserProfile } from '../services/firestore-service';
 
 // Define available options (based on documentation, limited selection for UI)
 const hairStyles = ['short01', 'short02', 'short03', 'short04', 'short05', 'long01', 'long02', 'long03', 'long04', 'long05'];
@@ -33,6 +35,9 @@ function cycleIndex(currentIndex: number, arrayLength: number, direction: 'next'
 
 export function AvatarCreationScreen() {
   const navigate = useNavigate()
+  const { currentUser } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [options, setOptions] = useState<AvatarOptions>({
     hairStyleIndex: 0,
     eyeStyleIndex: 0,
@@ -110,17 +115,41 @@ export function AvatarCreationScreen() {
     }
   }, [options]); // Depend on the options state
 
-  function handleNextClick() {
-    // TODO: Persist the chosen options (options object)
-    console.log("Chosen Avatar Options:", {
+  async function handleNextClick() {
+    if (!currentUser) {
+      setSaveError("Not authenticated. Cannot save avatar.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    // Construct the final options used to generate the *current* avatar
+    const selectedGlasses = glassesStyles[options.glassesStyleIndex];
+    const currentAvatarOptions = {
       skinColor: skinColors[options.skinColorIndex],
       hairColor: hairColors[options.hairColorIndex],
       hair: hairStyles[options.hairStyleIndex],
       eyes: eyeStyles[options.eyeStyleIndex],
       mouth: mouthStyles[options.mouthStyleIndex],
-      glasses: glassesStyles[options.glassesStyleIndex],
-    });
-    navigate('/setup-confirm');
+      glasses: selectedGlasses === 'none' ? undefined : selectedGlasses,
+      // We don't need size or probability here, just the *choices*
+    };
+
+    // Create a seed string from the chosen options for reproducibility
+    // (Simple JSON stringify is one way, could use a more stable hash later)
+    const avatarSeed = JSON.stringify(currentAvatarOptions);
+
+    try {
+      await updateUserProfile(currentUser.uid, { avatarSeed: avatarSeed });
+      console.log('Avatar seed saved, navigating to confirmation...');
+      navigate('/setup-confirm');
+    } catch (error) {
+      console.error("Failed to save avatar seed:", error);
+      setSaveError("Could not save avatar. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   // OptionControl helper component - Fixed width for label span
@@ -136,7 +165,7 @@ export function AvatarCreationScreen() {
 
   return (
     // Main container: Adjusted padding, ensure justify-center works well with increased size
-    <div className="flex flex-col items-center justify-center h-screen bg-purple-100 p-2 md:p-4 overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-screen bg-purple-100 p-4 overflow-hidden">
       {/* Title - Slightly larger margin */} 
       <h1 className="text-xl md:text-2xl font-bold text-purple-800 text-center mb-4 md:mb-6">Create Your Avatar</h1>
 
@@ -162,20 +191,27 @@ export function AvatarCreationScreen() {
         </div>
       </div>
 
-      {/* Bottom Buttons - Increased size/padding/spacing */}
+      {/* Display Save Error */}
+      {saveError && (
+         <p className="text-sm text-red-600 text-center mt-2 mb-2">{saveError}</p>
+      )}
+
+      {/* Bottom Buttons - Update disabled state and text */}
       <div className="flex items-center space-x-8 md:space-x-10 mt-2">
-        <button
-          className="px-8 py-3 bg-yellow-400 text-yellow-800 font-semibold rounded-xl shadow-md hover:bg-yellow-500 text-xl"
-          onClick={randomizeAllOptions}
-        >
-          Randomize
-        </button>
-        <button
-          className="px-10 py-3 bg-orange-500 text-white font-semibold rounded-xl shadow-md hover:bg-orange-600 text-xl"
-          onClick={handleNextClick}
-        >
-          Looks Good!
-        </button>
+          <button
+            className="px-8 py-3 bg-yellow-400 text-yellow-800 font-semibold rounded-xl shadow-md hover:bg-yellow-500 text-xl disabled:opacity-50"
+            onClick={randomizeAllOptions}
+            disabled={isSaving}
+          >
+              Randomize
+          </button>
+          <button
+            className="px-10 py-3 bg-orange-500 text-white font-semibold rounded-xl shadow-md hover:bg-orange-600 text-xl disabled:opacity-50"
+            onClick={handleNextClick}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Looks Good!'}
+          </button>
       </div>
     </div>
   )
