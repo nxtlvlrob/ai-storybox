@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getFirestore, collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, query, where, orderBy, getDocs, Timestamp, doc, deleteDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Import types - adjust path if necessary
@@ -14,54 +14,59 @@ export function MyStoriesScreen() {
   const [stories, setStories] = useState<StoryDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [storyToDelete, setStoryToDelete] = useState<StoryDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [menuOpenForStory, setMenuOpenForStory] = useState<string | null>(null);
 
   // Fetch stories on component mount
   useEffect(() => {
-    async function fetchStories() {
-      if (!auth.currentUser) {
-        setError('You must be logged in to view your stories');
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const userId = auth.currentUser.uid;
-        const storiesRef = collection(firestore, 'stories');
-        const storiesQuery = query(
-          storiesRef, 
-          where('userId', '==', userId),
-          orderBy('createdAt', 'desc') // Most recent first
-        );
-        
-        const querySnapshot = await getDocs(storiesQuery);
-        const fetchedStories: StoryDocument[] = [];
-        
-        querySnapshot.forEach((doc) => {
-          const data = doc.data() as Omit<StoryDocument, 'id'>;
-          fetchedStories.push({
-            ...data,
-            id: doc.id,
-            createdAt: data.createdAt instanceof Timestamp 
-              ? data.createdAt.toDate() 
-              : data.createdAt,
-            updatedAt: data.updatedAt instanceof Timestamp 
-              ? data.updatedAt.toDate() 
-              : data.updatedAt,
-          } as StoryDocument);
-        });
-        
-        setStories(fetchedStories);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching stories:', err);
-        setError('Failed to load your stories. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
     fetchStories();
   }, [auth, firestore]);
+
+  // Fetch stories function - extracted to be reusable
+  async function fetchStories() {
+    if (!auth.currentUser) {
+      setError('You must be logged in to view your stories');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const userId = auth.currentUser.uid;
+      const storiesRef = collection(firestore, 'stories');
+      const storiesQuery = query(
+        storiesRef, 
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc') // Most recent first
+      );
+      
+      const querySnapshot = await getDocs(storiesQuery);
+      const fetchedStories: StoryDocument[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as Omit<StoryDocument, 'id'>;
+        fetchedStories.push({
+          ...data,
+          id: doc.id,
+          createdAt: data.createdAt instanceof Timestamp 
+            ? data.createdAt.toDate() 
+            : data.createdAt,
+          updatedAt: data.updatedAt instanceof Timestamp 
+            ? data.updatedAt.toDate() 
+            : data.updatedAt,
+        } as StoryDocument);
+      });
+      
+      setStories(fetchedStories);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching stories:', err);
+      setError('Failed to load your stories. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   // Format date for display
   function formatDate(date: Date | undefined): string {
@@ -94,6 +99,58 @@ export function MyStoriesScreen() {
   function handleCreateStory() {
     navigate('/create-story');
   }
+
+  // Toggle story menu open/closed
+  function toggleStoryMenu(event: React.MouseEvent, storyId: string) {
+    event.stopPropagation(); // Prevent story click from triggering
+    setMenuOpenForStory(prevId => prevId === storyId ? null : storyId);
+  }
+
+  // Open delete confirmation for a story
+  function confirmDeleteStory(event: React.MouseEvent, story: StoryDocument) {
+    event.stopPropagation(); // Prevent navigation
+    setStoryToDelete(story);
+    setMenuOpenForStory(null); // Close menu
+  }
+
+  // Cancel story deletion
+  function cancelDelete() {
+    setStoryToDelete(null);
+  }
+
+  // Delete story
+  async function deleteStory() {
+    if (!storyToDelete) return;
+    
+    try {
+      setIsDeleting(true);
+      await deleteDoc(doc(firestore, 'stories', storyToDelete.id));
+      
+      // Update local state to remove the deleted story
+      setStories(prevStories => 
+        prevStories.filter(s => s.id !== storyToDelete.id)
+      );
+      
+      setStoryToDelete(null);
+    } catch (err) {
+      console.error('Error deleting story:', err);
+      setError('Failed to delete story. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  // Close any open menus when clicking outside
+  useEffect(() => {
+    function handleClickOutside() {
+      setMenuOpenForStory(null);
+    }
+    
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, []);
 
   // Loading state
   if (isLoading) {
@@ -166,7 +223,7 @@ export function MyStoriesScreen() {
                 <div 
                   key={story.id}
                   onClick={() => handleStoryClick(story.id)}
-                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:translate-y-[-2px]"
+                  className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:translate-y-[-2px] relative"
                 >
                   <div className="aspect-[4/3] bg-gray-200 relative">
                     {thumbnail ? (
@@ -188,6 +245,45 @@ export function MyStoriesScreen() {
                         {story.status === 'error' ? 'Error' : 'In Progress'}
                       </div>
                     )}
+                    
+                    {/* Story options menu button */}
+                    <button 
+                      onClick={(e) => toggleStoryMenu(e, story.id)}
+                      className="absolute top-2 left-2 bg-black/40 hover:bg-black/60 p-1.5 rounded-full text-white transition-all"
+                      aria-label="Story options"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+                    
+                    {/* Story options dropdown */}
+                    {menuOpenForStory === story.id && (
+                      <div className="absolute top-11 left-2 bg-white rounded-lg shadow-lg py-1 z-10 min-w-[150px]">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStoryClick(story.id);
+                          }}
+                          className="w-full text-left px-4 py-2 text-gray-700 hover:bg-purple-50 flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Play
+                        </button>
+                        <button 
+                          onClick={(e) => confirmDeleteStory(e, story)}
+                          className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
                     <h2 className="text-lg font-semibold text-purple-900 mb-1 line-clamp-1">{story.title}</h2>
@@ -199,6 +295,41 @@ export function MyStoriesScreen() {
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {storyToDelete && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full animate-pop-in">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Story</h3>
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete "{storyToDelete.title}"? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteStory}
+                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center justify-center"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

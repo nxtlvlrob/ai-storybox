@@ -9,7 +9,7 @@
 
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
-import { DocumentSnapshot, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 // Import Google Cloud AI Platform and TTS clients
@@ -22,7 +22,6 @@ import { vertexAI, imagen3 } from "@genkit-ai/vertexai"; // Import Imagen model
 
 // Import types using the path alias
 import { StoryDocument, StoryStatus, StorySection, UserProfile } from "../../types";
-import { Character } from "../../types";
 
 import { Resvg } from "@resvg/resvg-js";
 import { URL } from "url"; // Import the URL class from Node.js
@@ -151,8 +150,7 @@ export const generateStoryPipeline = onDocumentCreated(
       return; // Stop if status update fails
     }
 
-    // --- 2. Fetch Character Details AND User Profile ---
-    let characters: Character[] = [];
+    // --- 2. Fetch User Profile ---
     let userProfile: UserProfile | null = null;
     let actualPngBase64: string | null = null; // Variable to hold the final PNG base64
 
@@ -179,23 +177,9 @@ export const generateStoryPipeline = onDocumentCreated(
         logger.warn(`[${storyId}] User profile not found for ${userId}. Cannot fetch avatar.`);
       }
 
-      // Fetch Characters (as before)
-      if (storyData.characterIds && storyData.characterIds.length > 0) {
-        logger.info(`[${storyId}] Fetching details for characters: ${storyData.characterIds.join(", ")}`);
-        const characterPromises = storyData.characterIds.map((id: string) =>
-          db.collection("characters").doc(id).get()
-        );
-        const characterSnapshots = await Promise.all(characterPromises);
-        characters = characterSnapshots
-          .filter((doc: DocumentSnapshot) => doc.exists)
-          .map((doc: DocumentSnapshot) => ({ id: doc.id, ...doc.data() } as Character));
-        if (characters.length !== storyData.characterIds.length) {
-          logger.warn(`[${storyId}] Some characters not found.`);
-        }
-        logger.info(`[${storyId}] Fetched ${characters.length} characters.`);
-      }
+      // Note: Character fetching is removed as character functionality is not available yet
     } catch (error) {
-      logger.error(`[${storyId}] Failed fetching user profile or characters:`, error);
+      logger.error(`[${storyId}] Failed fetching user profile:`, error);
       await storyRef.update({
         status: "error" as StoryStatus,
         errorMessage: `Setup failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -204,17 +188,12 @@ export const generateStoryPipeline = onDocumentCreated(
       return;
     }
 
-    const characterDescriptions = characters.map((c) => `- ${c.name}: ${c.description}`).join("\n");
-    const characterDetailsString = characters.map((c) => `${c.name} (${c.description})`).join(", ");
-
-    // Create clearer strings for prompt injection
-    const characterNames = characters.map((c) => c.name).join(", ");
-    const characterDescriptionsForPrompt = characters.map((c) => `- ${c.name}: ${c.description}`).join("\n"); // Detailed list for context
-    const characterMention = characters.length > 0 ? `Include the character(s) ${characterNames} in the story.` : "";
-    // Use characterDescriptionsForPrompt if actualPngBase64 is null
-    const characterVisualDescription = characters.length > 0 && !actualPngBase64
-      ? `Characters visually described as:\n${characterDescriptionsForPrompt}`
-      : ""; // Don't add text description if image is provided
+    // Include user's name in the story if available
+    const userName = userProfile?.name || "the child";
+    const userDescription = "A curious, adventurous child who loves to explore and discover new things.";
+    
+    // User for visual descriptions
+    const userVisualDescription = `Main character ${userName}: ${userDescription}`;
 
     // --- 3. Generate Title and Plan (using Genkit) ---
     let title = "My Story"; // Default title
@@ -222,8 +201,8 @@ export const generateStoryPipeline = onDocumentCreated(
     try {
       logger.info(`[${storyId}] Generating title and plan using Genkit Gemini...`);
 
-      // Generate Title
-      const titlePrompt = `Create a short, catchy title (3-7 words) for a children's story about "${storyData.topic || "adventure"}". ${characters.length > 0 ? `Characters: ${characterDetailsString}` : ""}. Respond ONLY with the title text.`;
+      // Generate Title - focused on the user as main character
+      const titlePrompt = `Create a short, catchy title (3-7 words) for a children's story about "${storyData.topic || "adventure"}" featuring ${userName} as the main character. Respond ONLY with the title text.`;
       const titleResult = await ai.generate({
         model: gemini20Flash,
         prompt: titlePrompt,
@@ -232,12 +211,22 @@ export const generateStoryPipeline = onDocumentCreated(
       title = titleResult.text?.trim() || title; // Use generated title or default
       logger.info(`[${storyId}] Generated title: "${title}"`);
 
-      // Generate Plan
+      // Generate Plan - Create a more detailed plan with story arc structure
       const planLength = storyData.length === "short" ? 3 : storyData.length === "long" ? 7 : 5;
-      const planPrompt = `Create a simple story plan (JSON array) for a children's story. Title: "${title}". Topic: "${storyData.topic || "adventure"}". ${characters.length > 0 ? `
-Characters:
-${characterDescriptions}` : ""}
-Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON object containing a "plan" key with an array of strings. Example: {"plan": ["Scene 1...", "Scene 2..."]}`;
+      const planPrompt = `Create a detailed story plan (JSON array) for a children's story. Title: "${title}". Topic: "${storyData.topic || "adventure"}".
+Main character: ${userName} - ${userDescription}
+
+The story should follow a classic story arc:
+- Beginning: Introduce ${userName} and set up the situation (1-2 parts)
+- Middle: Present a challenge or adventure (${planLength - 2} parts)
+- End: Resolve the story with a positive ending (1 part)
+
+Plan should have exactly ${planLength} parts. DO NOT label them as "Scene 1", etc. - instead, give each a descriptive phrase about what happens in that part.
+
+Each part should be substantial enough for 4-6 sentences of story content.
+
+Respond ONLY with a JSON object containing a "plan" key with an array of strings. 
+Example: {"plan": ["${userName} discovers a magical door", "The door leads to a forest of talking animals", "Finding the way home"]}`;
 
       const planResult = await ai.generate({
         model: gemini20Flash,
@@ -270,13 +259,13 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
       logger.info(`[${storyId}] Generated plan with ${plan.length} sections.`);
 
       // --- 4. Immediate Firestore Update (Title, Plan, Initial Sections) ---
-      const initialSectionsData: StorySection[] = plan.map((planItem, index) => ({
+      const initialSectionsData: StorySection[] = Array.isArray(plan) ? plan.map((planItem, index) => ({
         index,
         planItem,
         text: null,
         imageUrl: null,
         audioUrl: null,
-      }));
+      })) : [];
       const firstStatus: StoryStatus = "generating_text_0"; // Start background generation
       const initialUpdateData: Partial<StoryDocumentWriteData> = {
         title,
@@ -299,7 +288,7 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
     }
 
     // --- 5. Background Section Generation Loop (Refactored) ---
-    let previousText = "The story begins."; // Context for first section
+    let previousText = `Once upon a time, there was a child named ${userName} who loved adventures.`; // Updated context for first section
     // Update style lock with user request
     const STYLE_LOCK = "Flat Illustrated with Texture (Adventure Time / Steven Universe Inspired), simple, friendly, colorful.";
 
@@ -315,18 +304,31 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
         logger.info(`[${storyId}] Updating status to '${textStatus}'`);
         await storyRef.update({ status: textStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // Update text prompt to include character mention
-        const textPrompt = `Continue the children's story titled "${title}". Scene: "${currentPlanItem}"\nPrevious part: "${previousText}"\n${characterMention}\nWrite 2-4 simple, engaging sentences suitable for a 3-8 year old. Respond ONLY with the text for this section.`;
+        // Updated text prompt for longer, more engaging content with the user as the main character
+        const textPrompt = `Continue the children's story titled "${title}" featuring ${userName} as the main character.
+
+Part: "${currentPlanItem}"
+Previous text: "${previousText}"
+
+Include ${userName} as the main character in the story.
+
+Write 4-6 engaging sentences suitable for a 3-8 year old. Make the story vivid, fun, and include dialogue where appropriate.
+DO NOT start with phrases like "Scene 1" or "Part 3".
+DO NOT end with "to be continued" or similar phrases.
+Respond ONLY with the story text for this section.`;
 
         const textResult = await ai.generate({
           model: gemini20Flash,
           prompt: textPrompt,
-          config: { temperature: 0.7, maxOutputTokens: 256 },
+          config: { temperature: 0.7, maxOutputTokens: 512 },
         });
         generatedText = textResult.text?.trim() || null;
 
         if (!generatedText) throw new Error("Text generation failed (empty content).");
 
+        // Remove any scene prefixes that might have been added despite instructions
+        generatedText = generatedText.replace(/^(Scene|Part|Chapter)\s+\d+[:.]\s*/i, "");
+        
         previousText = generatedText; // Update context for next iteration
         logger.info(`[${storyId}] Generated text for section ${index}.`);
       } catch (error) {
@@ -347,11 +349,10 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let imagePrompt: any;
-        const baseTextPrompt = `Illustration in a ${STYLE_LOCK} style. Scene depicting: ${generatedText}.`;
+        const baseTextPrompt = `Illustration in a ${STYLE_LOCK} style. Scene depicting: ${userName} (a young child who is the main character) ${generatedText}.`;
 
         // Check if we successfully got PNG base64 data from the user profile SVG
-        if (actualPngBase64 && characters.length > 0) {
-          const characterName = characters[0].name;
+        if (actualPngBase64) {
           const characterImagePart = {
             inlineData: {
               mimeType: "image/png",
@@ -360,13 +361,13 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
           };
           imagePrompt = [
             characterImagePart,
-            { text: `${baseTextPrompt}\nUse the provided image for the character named ${characterName}.` },
+            { text: `${baseTextPrompt}\nUse the provided image as the reference for ${userName}, who is the main character in this story.` },
           ];
           logger.info(`[${storyId}] Using multimodal prompt with converted PNG avatar for section ${index}.`);
         } else {
           // Fallback to text-only prompt using descriptions
-          imagePrompt = `${baseTextPrompt}\n${characterVisualDescription}`;
-          logger.info(`[${storyId}] Using text-only image prompt for section ${index}. PNG Base64 available: ${!!actualPngBase64}, Characters: ${characters.length}`);
+          imagePrompt = `${baseTextPrompt}\n${userVisualDescription}`;
+          logger.info(`[${storyId}] Using text-only image prompt for section ${index}. PNG Base64 available: ${!!actualPngBase64}`);
         }
 
         const imageResult = await ai.generate({
@@ -514,16 +515,21 @@ Plan should have exactly ${planLength} simple scenes. Respond ONLY with a JSON o
         };
 
         // **Detailed Logging:** Log the exact object before attempting the update.
-        // Use JSON.stringify to handle potential complex objects or undefined values safely in logs.
-        // Using logger.debug for potentially verbose output. Ensure your Function log level captures debug messages if needed.
         logger.debug(`[${storyId}] Preparing to update Firestore for section ${index}. Data being assigned: ${JSON.stringify(updatedSectionData, null, 2)}`);
 
         // Assign the validated & logged data back to the array copy
         updatedSections[index] = updatedSectionData;
 
         // Log the whole array structure briefly (optional, can be large)
-        logger.debug(`[${storyId}] Full sections array structure before update (index ${index}): ${JSON.stringify(updatedSections.map(s => ({ index: s.index, hasText: !!s.text, hasImg: !!s.imageUrl, hasAudio: !!s.audioUrl })), null, 2)}`);
-
+        // Add null check for updatedSections before mapping
+        if (Array.isArray(updatedSections)) {
+          logger.debug(`[${storyId}] Full sections array structure before update (index ${index}): ${JSON.stringify(updatedSections.map(s => s ? { 
+            index: s.index, 
+            hasText: !!s.text, 
+            hasImg: !!s.imageUrl, 
+            hasAudio: !!s.audioUrl 
+          } : null), null, 2)}`);
+        }
 
         // Write the entire modified array back to Firestore
         await storyRef.update({
@@ -664,14 +670,14 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
         logger.warn(`generateTopics: Parsed response is not a valid TopicSuggestion array for ${uid}. Raw: ${topicsJson}`);
         // Attempt basic cleanup if it looks like maybe just text was returned
         if (typeof topicsJson === "string") {
-          const simpleTopics = topicsJson.split("\n").map((t) => t.trim()).filter(Boolean);
+          const simpleTopics = topicsJson.split("\n").map((t) => t?.trim() || "").filter(Boolean);
           if (simpleTopics.length > 0) {
             // Return with default/missing emojis if simple text list detected
             return simpleTopics.map((text) => ({ text, emojis: "✨" }));
           }
         } else if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) {
           // Handle case where it returned array of strings instead of objects
-          return topics.map((text) => ({ text, emojis: "✨" }));
+          return topics.map((text) => ({ text: text || "", emojis: "✨" }));
         }
         throw new Error("Parsed response did not match expected format: [{text: string, emojis: string}].");
       }

@@ -37,14 +37,21 @@ export function StoryViewerScreen() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [currentSectionIndex, setCurrentSectionIndex] = useState<number>(0);
   const [isSwiping, setIsSwiping] = useState<boolean>(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [hasStartedPlayback, setHasStartedPlayback] = useState<boolean>(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(true);
   const [isTextVisible, setIsTextVisible] = useState<boolean>(false);
+  
+  // Refs for audio control and tracking
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const currentPlayingSection = useRef<string | null>(null);
+  const loadedSections = useRef<Set<string>>(new Set());
+  
+  // Track Firestore updates to prevent audio restarts
+  const lastStoryUpdate = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!storyId) {
@@ -73,13 +80,26 @@ export function StoryViewerScreen() {
              setStory(null);
              setIsLoading(false);
           } else {
-            // Convert Timestamps if necessary (onSnapshot often does this automatically, but good practice)
-             const processedData = {
-               ...data,
-               id: docSnap.id,
-               createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-               updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-             };
+            // Record the time of this update
+            lastStoryUpdate.current = Date.now();
+            
+            // Convert Timestamps
+            const processedData = {
+              ...data,
+              id: docSnap.id,
+              createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
+              updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+            };
+            
+            // Track which sections have content for playback stability
+            if (Array.isArray(processedData.sections)) {
+              processedData.sections.forEach((section, idx) => {
+                if (section.audioUrl) {
+                  loadedSections.current.add(`${storyId}_${idx}`);
+                }
+              });
+            }
+            
             setStory(processedData);
             setError(null);
             
@@ -118,20 +138,37 @@ export function StoryViewerScreen() {
     };
   }, [storyId, firestore, auth, navigate, hasStartedPlayback]);
 
-  // Auto-play the section once it's ready
+  // Auto-play the section once it's ready - with Firestore update protection
   useEffect(() => {
-    if (story && Array.isArray(story.sections) && 
-        currentSectionIndex < story.sections.length && 
-        isAutoPlaying) {
-      const section = story.sections[currentSectionIndex];
-      if (section && section.audioUrl) {
-        playAudio(section.audioUrl);
-      }
+    if (!story || !Array.isArray(story.sections) || 
+        currentSectionIndex >= story.sections.length || 
+        !isAutoPlaying) {
+      return;
     }
-  }, [story, currentSectionIndex, isAutoPlaying]);
+    
+    const section = story.sections[currentSectionIndex];
+    if (!section || !section.audioUrl) {
+      return;
+    }
+    
+    const currentSectionId = `${storyId}_${currentSectionIndex}`;
+    
+    // If this is a new section that we haven't started playing yet, or 
+    // if no section is currently playing, start playback
+    if (currentSectionId !== currentPlayingSection.current) {
+      playAudio(section.audioUrl, currentSectionId);
+    }
+    // Otherwise, if this is the same section already playing, don't restart
+    
+  }, [story, currentSectionIndex, isAutoPlaying, storyId]);
 
   // Function to play audio with auto-advance to next section
-  const playAudio = useCallback((audioUrl: string) => {
+  const playAudio = useCallback((audioUrl: string, sectionId: string) => {
+    // Don't restart the same audio if it's already playing
+    if (currentPlayingSection.current === sectionId && audioRef.current) {
+      return;
+    }
+    
     // Stop currently playing audio if any
     if (audioRef.current) {
       audioRef.current.pause();
@@ -141,14 +178,25 @@ export function StoryViewerScreen() {
     if (audioUrl) {
       const newAudio = new Audio(audioUrl);
       audioRef.current = newAudio;
+      currentPlayingSection.current = sectionId;
       setCurrentAudio(newAudio);
       
-      newAudio.play().catch(e => console.error("Error playing audio:", e));
+      // Set up playback tracking
+      newAudio.addEventListener('play', () => {
+        // Mark this section as loaded for future reference
+        loadedSections.current.add(sectionId);
+      });
+      
+      newAudio.play().catch(e => {
+        console.error("Error playing audio:", e);
+        currentPlayingSection.current = null;
+      });
       
       // Set up auto-advance when audio ends
       newAudio.onended = () => {
         setCurrentAudio(null);
         audioRef.current = null;
+        currentPlayingSection.current = null;
         
         // Advance to next section if available and auto-play is on
         if (story && 
@@ -169,6 +217,7 @@ export function StoryViewerScreen() {
         audioRef.current.pause();
         setCurrentAudio(null);
         audioRef.current = null;
+        currentPlayingSection.current = null;
       }
       setCurrentSectionIndex(prev => prev - 1);
     }
@@ -182,6 +231,7 @@ export function StoryViewerScreen() {
         audioRef.current.pause();
         setCurrentAudio(null);
         audioRef.current = null;
+        currentPlayingSection.current = null;
       }
       setCurrentSectionIndex(prev => prev + 1);
     }
@@ -236,8 +286,11 @@ export function StoryViewerScreen() {
   const restartStory = () => {
     setCurrentSectionIndex(0);
     setIsAutoPlaying(true);
+    currentPlayingSection.current = null;
+    
     if (story && Array.isArray(story.sections) && story.sections[0]?.audioUrl) {
-      setTimeout(() => playAudio(story.sections[0].audioUrl!), 300);
+      const firstSectionId = `${storyId}_0`;
+      setTimeout(() => playAudio(story.sections[0].audioUrl!, firstSectionId), 300);
     }
   };
 
@@ -398,7 +451,7 @@ export function StoryViewerScreen() {
               {currentSection.audioUrl && !currentAudio && (
                 <button
                   onClick={() => {
-                    playAudio(currentSection.audioUrl!);
+                    playAudio(currentSection.audioUrl!, `${storyId}_${currentSectionIndex}`);
                     setIsAutoPlaying(true);
                   }}
                   className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 hover:bg-white/90 text-indigo-600 p-6 rounded-full shadow-xl transition-all hover:scale-110 focus:outline-none focus:ring-4 focus:ring-indigo-300"
