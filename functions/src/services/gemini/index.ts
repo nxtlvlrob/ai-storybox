@@ -1,7 +1,9 @@
 import { genkit } from "genkit";
 import { googleAI, gemini20Flash } from "@genkit-ai/googleai";
-import { vertexAI, imagen3 } from "@genkit-ai/vertexai";
+import { vertexAI } from "@genkit-ai/vertexai";
+import { GoogleGenAI } from "@google/genai";
 import * as logger from "firebase-functions/logger";
+import { defineString } from "firebase-functions/params";
 import { GenerateTextInput, GenerateImageInput, StoryPlan, StoryLength } from "types";
 import { 
   buildTitlePrompt, 
@@ -9,6 +11,9 @@ import {
   buildSectionTextPrompt,
   buildImagePrompt
 } from "../../prompts";
+
+// Define the secret parameter for the Gemini API Key
+const googleGenaiApiKey = defineString("GOOGLE_GENAI_API_KEY");
 
 // Initialize Genkit client with required plugins
 function initializeGenkit(apiKey?: string) {
@@ -210,75 +215,98 @@ export async function generateSectionText(input: GenerateTextInput): Promise<str
 }
 
 /**
- * Generate story image using Imagen
+ * Generate story image using Gemini native image generation
  * @param input The input parameters for image generation
- * @returns URL to the generated image
+ * @returns URL to the generated image or Base64 encoded image data
  */
 export async function generateImage(input: GenerateImageInput): Promise<string> {
   try {
     logger.info("Generating image with prompt:", input.textPrompt);
     
-    const ai = initializeGenkit(input.config?.apiKey);
+    // Retrieve the API key using the defined secret
+    const apiKey = googleGenaiApiKey.value();
+    if (!apiKey) {
+      logger.error("Gemini API Key is not configured. Set GOOGLE_GENAI_API_KEY secret.");
+      throw new Error("API key configuration error.");
+    }
+    // Cast explicitly to satisfy TypeScript
+    const genAI = new GoogleGenAI({ apiKey });
     
-    // Construct the generate options
-    const generateOptions: any = {
-      model: imagen3,
-      output: { format: "media" },
-      config: {
-        aspectRatio: "16:9",
-      }
-    };
+    // Prepare the content parts for the request
+    const contents: Array<string | { inlineData: { mimeType: string; data: string } }> = [];
     
-    // Add the prompt based on whether we have a character image
+    // Add text prompt
+    contents.push(input.textPrompt);
+    
+    // Add character image if available
     if (input.characterImageBase64) {
-      generateOptions.prompt = [
-        {
-          inlineData: {
-            mimeType: "image/png",
-            data: input.characterImageBase64
-          }
-        },
-        { 
-          text: `${input.textPrompt}\nUse the provided image as the reference for the main character in this story.` 
-        },
-      ];
+      contents.push({
+        inlineData: {
+          mimeType: "image/png",
+          data: input.characterImageBase64
+        }
+      });
       logger.info("Using multimodal prompt with character image for image generation");
-    } else {
-      generateOptions.prompt = [{ text: input.textPrompt }];
-      logger.info("Using text-only prompt for image generation");
     }
     
     logger.info("Sending image generation request with prompt");
     
-    const imageResult = await ai.generate(generateOptions);
+    // Send the request with image generation capability
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents,
+      config: {
+        responseModalities: ["Text", "Image"],
+        temperature: input.config?.temperature || 0.7,
+        maxOutputTokens: input.config?.maxOutputTokens || 512
+      }
+    });
     
-    // Debug log the full response structure
-    logger.debug("Imagen response structure:", JSON.stringify({
-      hasMedia: !!imageResult.media,
-      hasOutput: !!imageResult.output,
-      hasText: !!imageResult.text,
-      keys: Object.keys(imageResult)
+    // Log the structure of the response
+    logger.debug("Image generation response structure:", JSON.stringify({
+      hasResponse: !!response,
+      hasText: !!response.text,
+      hasCandidates: !!response.candidates,
+      candidatesLength: response.candidates?.length || 0,
+      responseKeys: Object.keys(response)
     }));
     
-    // First check if we have a media object with URL
-    if (imageResult.media && typeof imageResult.media.url === "string" && imageResult.media.url.trim() !== "") {
-      logger.info(`Image generated successfully with media URL: ${imageResult.media.url.substring(0, 50)}...`);
-      return imageResult.media.url;
+    // Process the response to find image data
+    if (response.candidates && response.candidates.length > 0) {
+      const candidate = response.candidates[0];
+      if (candidate.content && candidate.content.parts) {
+        const parts = candidate.content.parts;
+        
+        // Look for the generated image in the response parts
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.data) {
+            // Return the base64 encoded image data with MIME type
+            logger.info("Image generated successfully (base64 data)");
+            return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+          }
+        }
+        
+        // If no image found but text is present, log it for debugging
+        for (const part of parts) {
+          if (part.text) {
+            logger.warn("Image generation returned text instead of image:", part.text);
+          }
+        }
+      }
     }
     
-    // Check if the response includes a text property with a data URL
-    if (imageResult.text && typeof imageResult.text === "string") {
-      const text = imageResult.text.trim();
-      // Check if text is a data URL or includes a URL
+    // If the response contains text directly, check if it's a URL or data URL
+    if (response.text) {
+      const text = response.text.trim();
       if (text.startsWith("data:image/") || text.match(/https?:\/\/[\w.-]+/)) {
-        logger.info(`Image URL found in text response: ${text.substring(0, 50)}...`);
+        logger.info("Image URL found in text response");
         return text;
       }
     }
     
-    // If we get here, no valid image URL was found
-    logger.error("Image generation failed: No valid image URL found in response", JSON.stringify(imageResult));
-    throw new Error("Image generation failed (no valid image URL in response)");
+    // If we get here, no image was found in the response
+    logger.error("Image generation failed: No image data in response", JSON.stringify(response));
+    throw new Error("Image generation failed (no image data in response)");
   } catch (error) {
     logger.error("Image generation failed:", error);
     throw error;
@@ -290,7 +318,7 @@ export async function generateImage(input: GenerateImageInput): Promise<string> 
  * @param input The input parameters for text generation
  * @returns The generated text or parsed JSON object
  */
-export async function generate(input: GenerateTextInput): Promise<string | any> {
+export async function generate(input: GenerateTextInput): Promise<string | Record<string, unknown>> {
   try {
     logger.info("General text generation with prompt:", input.prompt);
     

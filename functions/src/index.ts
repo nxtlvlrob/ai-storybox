@@ -11,6 +11,8 @@ import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { defineString } from "firebase-functions/params";
 
 // Import Google Cloud AI Platform and TTS clients
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
@@ -35,6 +37,9 @@ export type StoryDocumentWriteData = Omit<StoryDocument, "createdAt" | "updatedA
   createdAt: FieldValue | Timestamp;
   updatedAt: FieldValue | Timestamp;
 };
+
+// Define the secret parameter for the Gemini API Key
+const googleGenaiApiKey = defineString("GOOGLE_GENAI_API_KEY");
 
 // Initialize Firebase Admin SDK (should be done once)
 // Functions environment automatically initializes, but explicit init is safe
@@ -470,8 +475,6 @@ export const generateStoryPipeline = onDocumentCreated(
 
 // === NEW: Generate Story Topics Callable Function ===
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineString } from "firebase-functions/params"; // << Import defineString
 import { buildTopicSuggestionsPrompt } from "./prompts";
 
 // Define the structure for topic suggestions
@@ -479,9 +482,6 @@ interface TopicSuggestion {
   text: string;
   emojis: string; // String containing 1-2 emojis
 }
-
-// Define the secret parameter for the Gemini API Key
-const googleGenaiApiKey = defineString("GOOGLE_GENAI_API_KEY");
 
 // Update return type annotation
 export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]> => {
@@ -510,8 +510,8 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
     throw new HttpsError("internal", "Failed to fetch user profile.", error);
   }
 
-  // 3. Get API Key
-  const apiKey = googleGenaiApiKey.value(); // <-- Access the secret value
+  // 3. Get API Key from the top-level definition
+  const apiKey = googleGenaiApiKey.value();
   if (!apiKey) {
     logger.error("generateTopics: GOOGLE_GENAI_API_KEY secret is not configured.");
     throw new HttpsError("internal", "API key configuration error.");
