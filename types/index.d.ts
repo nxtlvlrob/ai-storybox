@@ -1,6 +1,28 @@
 // Copied from ui/src/services/firestore-service.ts
 import { Timestamp, FieldValue } from "firebase/firestore";
 
+// Gemini Service Types
+export interface GeminiConfig {
+  apiKey?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
+export interface GenerateTextInput {
+  prompt: string;
+  config?: GeminiConfig;
+  outputFormat?: "text" | "json";
+}
+
+export interface GenerateImageInput {
+  textPrompt: string;
+  characterImageBase64?: string | null;
+  config?: GeminiConfig;
+}
+
+export interface StoryPlan {
+  plan: string[];
+}
 
 export interface Character {
     id: string;          // Firestore document ID

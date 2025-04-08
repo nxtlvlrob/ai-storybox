@@ -14,7 +14,7 @@
   },
   "compileOnSave": true,
   "include": [
-    "functions/src/*.ts",
+    "functions/src/**/*.ts",
     "../../types"
   ],
   "exclude": ["node_modules", "lib", ".eslintrc.js"]

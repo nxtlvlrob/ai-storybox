@@ -84,12 +84,12 @@ export function StoryViewerScreen() {
             lastStoryUpdate.current = Date.now();
             
             // Convert Timestamps
-            const processedData = {
-              ...data,
-              id: docSnap.id,
-              createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
-              updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-            };
+             const processedData = {
+               ...data,
+               id: docSnap.id,
+               createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
+               updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
+             };
             
             // Track which sections have content for playback stability
             if (Array.isArray(processedData.sections)) {
@@ -390,17 +390,17 @@ export function StoryViewerScreen() {
           ← Home
         </button>
         <h1 className="text-xl font-bold text-purple-900">{story.title}</h1>
-        <button
+      <button 
           onClick={toggleTextOverlay}
           className="p-2 bg-gray-100 rounded-full shadow-sm hover:bg-gray-200 text-sm transition"
           aria-label="Show/hide text"
-        >
+      >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
           </svg>
-        </button>
+      </button>
       </div>
-      
+
       {/* Main content area - Full height image */}
       <div 
         className="flex-1 overflow-hidden relative"
@@ -463,8 +463,8 @@ export function StoryViewerScreen() {
                     }}
                   />
                 ))}
-              </div>
-              
+            </div>
+
               {/* Loading spinner when audio not ready */}
               {!currentSection.audioUrl && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 p-6 rounded-full shadow-xl">
@@ -537,7 +537,7 @@ export function StoryViewerScreen() {
           </div>
         )}
       </div>
-      
+
       {/* Text Overlay - Only visible when toggled */}
       {isTextVisible && currentSection && currentSection.text && (
         <div 
@@ -593,7 +593,7 @@ export function StoryViewerScreen() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
       )}
     </div>
   );

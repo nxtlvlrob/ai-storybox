@@ -10,12 +10,15 @@
     "baseUrl": ".",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "types": ["../types"]
+    }
   },
   "compileOnSave": true,
   "include": [
-    "src/*.ts",
-    "../../../types"
+    "src/**/*.ts",
+    "../types/**/*.ts"
   ],
   "exclude": ["node_modules", "lib", ".eslintrc.js"]
 }

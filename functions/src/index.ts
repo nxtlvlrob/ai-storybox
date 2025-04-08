@@ -15,10 +15,14 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 // Import Google Cloud AI Platform and TTS clients
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 
-// Genkit Imports
-import { genkit } from "genkit";
-import { googleAI, gemini20Flash } from "@genkit-ai/googleai";
-import { vertexAI, imagen3 } from "@genkit-ai/vertexai"; // Import Imagen model
+// Import Gemini service functions
+import { 
+  generateStoryTitle, 
+  generateStoryPlan, 
+  generateStorySectionText, 
+  generateStorySectionImage,
+  generate
+} from "./services/gemini";
 
 // Import types using the path alias
 import { StoryDocument, StoryStatus, StorySection, UserProfile } from "../../types";
@@ -121,21 +125,13 @@ export const generateStoryPipeline = onDocumentCreated(
     const storyRef = snapshot.ref;
     const userId = storyData.userId;
 
-    logger.info(`[${storyId}] Genkit: Starting pipeline for user ${userId}...`);
+    logger.info(`[${storyId}] Starting story generation pipeline for user ${userId}...`);
 
     // Check initial status (Should be 'queued', set by UI)
     if (storyData.status !== "queued") {
       logger.warn(`[${storyId}] Function triggered for story not in 'queued' state (${storyData.status}). Skipping.`);
       return;
     }
-
-    // Initialize Genkit with required plugins
-    const ai = genkit({
-      plugins: [
-        googleAI(), // For Gemini models
-        vertexAI({ location: "us-central1" }), // For Imagen models, specify location
-      ],
-    });
 
     // --- 1. Initial Status Update ---
     try {
@@ -195,66 +191,28 @@ export const generateStoryPipeline = onDocumentCreated(
     // User for visual descriptions
     // const userVisualDescription = `Main character ${userName}: ${userDescription}`;
 
-    // --- 3. Generate Title and Plan (using Genkit) ---
+    // --- 3. Generate Title and Plan using our helper functions ---
     let title = "My Story"; // Default title
     let plan: string[] = [];
     try {
-      logger.info(`[${storyId}] Generating title and plan using Genkit Gemini...`);
+      logger.info(`[${storyId}] Generating title and plan...`);
 
-      // Generate Title - focused on the user as main character
-      const titlePrompt = `Create a short, catchy title (3-7 words) for a children's story about "${storyData.topic || "adventure"}" featuring ${userName} as the main character. Respond ONLY with the title text.`;
-      const titleResult = await ai.generate({
-        model: gemini20Flash,
-        prompt: titlePrompt,
-        config: { temperature: 0.7 },
-      });
-      title = titleResult.text?.trim() || title; // Use generated title or default
+      // Generate Title using our helper function
+      title = await generateStoryTitle(
+        `${userName} (${userDescription})`, 
+        storyData.topic || "adventure"
+      );
       logger.info(`[${storyId}] Generated title: "${title}"`);
 
-      // Generate Plan - Create a more detailed plan with story arc structure
-      const planLength = storyData.length === "short" ? 3 : storyData.length === "long" ? 7 : 5;
-      const planPrompt = `Create a detailed story plan (JSON array) for a children's story. Title: "${title}". Topic: "${storyData.topic || "adventure"}".
-Main character: ${userName} - ${userDescription}
-
-The story should follow a classic story arc:
-- Beginning: Introduce ${userName} and set up the situation (1-2 parts)
-- Middle: Present a challenge or adventure (${planLength - 2} parts)
-- End: Resolve the story with a positive ending (1 part)
-
-Plan should have exactly ${planLength} parts. DO NOT label them as "Scene 1", etc. - instead, give each a descriptive phrase about what happens in that part.
-
-Each part should be substantial enough for 4-6 sentences of story content.
-
-Respond ONLY with a JSON object containing a "plan" key with an array of strings. 
-Example: {"plan": ["${userName} discovers a magical door", "The door leads to a forest of talking animals", "Finding the way home"]}`;
-
-      const planResult = await ai.generate({
-        model: gemini20Flash,
-        prompt: planPrompt,
-        output: { format: "json" }, // Request JSON
-        config: { temperature: 0.7 },
-      });
-
-      // Genkit handles JSON parsing when format: 'json' is used
-      const parsedPlan = planResult.output;
-      if (parsedPlan?.plan && Array.isArray(parsedPlan.plan)) {
-        plan = parsedPlan.plan.filter((item: unknown): item is string => typeof item === "string");
-      } else {
-        // Attempt to parse raw text if JSON structure is wrong
-        const rawText = planResult.text;
-        logger.warn(`[${storyId}] Plan JSON parsing failed, attempting fallback on raw text: ${rawText}`);
-        try {
-          const fallbackParsed = JSON.parse(rawText || "{}");
-          if (fallbackParsed?.plan && Array.isArray(fallbackParsed.plan)) {
-            plan = fallbackParsed.plan.filter((item: unknown): item is string => typeof item === "string");
-          } else if (Array.isArray(fallbackParsed)) { // If it's just an array
-            plan = fallbackParsed.filter((item: unknown): item is string => typeof item === "string");
-          }
-        } catch (e) {/* ignore fallback parse error */ }
-      }
-
+      // Generate Plan using our helper function
+      plan = await generateStoryPlan(
+        `${userName} (${userDescription})`,
+        storyData.topic || "adventure",
+        storyData.length
+      );
+      
       if (plan.length === 0) {
-        throw new Error(`Parsed plan was empty. Raw response: ${planResult.text}`);
+        throw new Error("Generated plan was empty.");
       }
       logger.info(`[${storyId}] Generated plan with ${plan.length} sections.`);
 
@@ -288,10 +246,6 @@ Example: {"plan": ["${userName} discovers a magical door", "The door leads to a 
     }
 
     // --- 5. Background Section Generation Loop (Refactored) ---
-    let previousText = `Once upon a time, there was a child named ${userName} who loved adventures.`; // Updated context for first section
-    // Update style lock with user request
-    const STYLE_LOCK = "Flat Illustrated with Texture (Adventure Time / Steven Universe Inspired), simple, friendly, colorful.";
-
     for (let index = 0; index < plan.length; index++) {
       const currentPlanItem = plan[index];
       let generatedText: string | null = null;
@@ -304,32 +258,17 @@ Example: {"plan": ["${userName} discovers a magical door", "The door leads to a 
         logger.info(`[${storyId}] Updating status to '${textStatus}'`);
         await storyRef.update({ status: textStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // Updated text prompt for longer, more engaging content with the user as the main character
-        const textPrompt = `Continue the children's story titled "${title}" featuring ${userName} as the main character.
-
-Part: "${currentPlanItem}"
-Previous text: "${previousText}"
-
-Include ${userName} as the main character in the story.
-
-Write 4-6 engaging sentences suitable for a 3-8 year old. Make the story vivid, fun, and include dialogue where appropriate.
-DO NOT start with phrases like "Scene 1" or "Part 3".
-DO NOT end with "to be continued" or similar phrases.
-Respond ONLY with the story text for this section.`;
-
-        const textResult = await ai.generate({
-          model: gemini20Flash,
-          prompt: textPrompt,
-          config: { temperature: 0.7, maxOutputTokens: 512 },
-        });
-        generatedText = textResult.text?.trim() || null;
+        // Generate section text using our helper function
+        generatedText = await generateStorySectionText(
+          `${userName} (${userDescription})`,
+          storyData.topic || "adventure",
+          currentPlanItem,
+          index,
+          plan.length
+        );
 
         if (!generatedText) throw new Error("Text generation failed (empty content).");
-
-        // Remove any scene prefixes that might have been added despite instructions
-        generatedText = generatedText.replace(/^(Scene|Part|Chapter)\s+\d+[:.]\s*/i, "");
         
-        previousText = generatedText; // Update context for next iteration
         logger.info(`[${storyId}] Generated text for section ${index}.`);
       } catch (error) {
         logger.error(`[${storyId}] Text gen failed (sec ${index}):`, error);
@@ -347,60 +286,22 @@ Respond ONLY with the story text for this section.`;
         logger.info(`[${storyId}] Updating status to '${imageStatus}'`);
         await storyRef.update({ status: imageStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let imagePrompt = [] as any;
-        const baseTextPrompt = `Illustration in a ${STYLE_LOCK} style. Scene depicting: ${userName} (a young child who is the main character) ${generatedText}.`;
+        // Generate image using our helper function
+        generatedImageUrl = await generateStorySectionImage(
+          `${userName} (${userDescription})`,
+          currentPlanItem,
+          generatedText,
+          actualPngBase64
+        );
 
-        // Check if we successfully got PNG base64 data from the user profile SVG
-        if (actualPngBase64) {
-          const characterImagePart = {
-            inlineData: {
-              mimeType: "image/png",
-              data: actualPngBase64
-            }
-          };
-          imagePrompt = [
-            characterImagePart,
-            { text: `${baseTextPrompt}\nUse the provided image as the reference for ${userName}, who is the main character in this story.` },
-          ];
-          logger.info(`[${storyId}] Using multimodal prompt with converted PNG avatar for section ${index}.`);
-        } else {
-          // Fallback to text-only prompt using descriptions
-          imagePrompt = [
-            { text: baseTextPrompt },
-          ];
-        }
-
-        console.log("imagePrompt", imagePrompt);
-
-        const imageResult = await ai.generate({
-          model: imagen3,
-          prompt: imagePrompt, // Pass the constructed prompt
-          output: { format: "media" },
-          config: {
-            // Request a landscape format image with dimensions close to 16:9
-            aspectRatio: "16:9",
-          }
-        });
-
-        logger.debug(`[${storyId}] Full imageResult.media object for section ${index}: ${JSON.stringify(imageResult?.media, null, 2)}`);
-
-        const media = imageResult.media;
-
-        // Validate the media response
-        if (!media || typeof media.url !== "string" || media.url.trim() === "") {
-          logger.error(`[${storyId}] Image generation failed for section ${index}. Reason: Invalid or missing media.url. Response: ${JSON.stringify(imageResult)}`);
-          throw new Error("Image generation failed (invalid media URL received).");
-        }
-
-        const potentialUrl = media.url;
+        logger.info(`[${storyId}] Generated image for section ${index}: ${generatedImageUrl}`);
 
         // Check if the result is a data URI or a GCS URL
-        if (potentialUrl.startsWith("data:image/png;base64,")) {
+        if (generatedImageUrl.startsWith("data:image/png;base64,")) {
           logger.warn(`[${storyId}] Image generation returned a base64 data URI for section ${index}. Uploading to GCS...`);
 
           // Extract base64 data
-          const base64Data = potentialUrl.replace(/^data:image\/png;base64,/, "");
+          const base64Data = generatedImageUrl.replace(/^data:image\/png;base64,/, "");
           const imageBuffer = Buffer.from(base64Data, "base64");
 
           // Define GCS path
@@ -414,15 +315,6 @@ Respond ONLY with the story text for this section.`;
           generatedImageUrl = imageFile.publicUrl(); // Store the GCS URL
 
           logger.info(`[${storyId}] Base64 image successfully uploaded for section ${index}. URL: ${generatedImageUrl}`);
-
-        } else if (potentialUrl.startsWith("https://") || potentialUrl.startsWith("http://")) {
-          // Assume it's a standard URL (hopefully a GCS one)
-          generatedImageUrl = potentialUrl; // Assign the URL directly
-          logger.info(`[${storyId}] Image URL obtained directly for section ${index}: ${generatedImageUrl}`);
-        } else {
-          // URL format is unrecognized
-          logger.error(`[${storyId}] Image generation failed for section ${index}. Reason: Received URL is not a data URI or a standard HTTP(S) URL. URL: ${potentialUrl}`);
-          throw new Error("Image generation failed (unrecognized URL format).");
         }
 
       } catch (error) {
@@ -580,6 +472,7 @@ Respond ONLY with the story text for this section.`;
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineString } from "firebase-functions/params"; // << Import defineString
+import { buildTopicSuggestionsPrompt } from "./prompts";
 
 // Define the structure for topic suggestions
 interface TopicSuggestion {
@@ -617,86 +510,71 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
     throw new HttpsError("internal", "Failed to fetch user profile.", error);
   }
 
-  // 3. Initialize Genkit with API Key
+  // 3. Get API Key
   const apiKey = googleGenaiApiKey.value(); // <-- Access the secret value
   if (!apiKey) {
     logger.error("generateTopics: GOOGLE_GENAI_API_KEY secret is not configured.");
     throw new HttpsError("internal", "API key configuration error.");
   }
 
-  const ai = genkit({
-    plugins: [
-      // Pass the API key to the googleAI plugin
-      googleAI({ apiKey: apiKey }),
-    ],
-  });
-
-  // 4. Construct Updated Prompt
+  // 4. Get age and gender from profile
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const age = userProfile.birthday ? Math.floor((Date.now() - (userProfile.birthday as any).toDate().getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 5; // Example age calculation
   const gender = userProfile.gender || "child"; // Default if gender not set
-  // Update prompt to ask for text and emojis in a specific JSON structure
-  const prompt = `Suggest 9 simple, creative, and fun story *ideas* or *titles* suitable for a ${age}-year-old ${gender}.
-    Each suggestion should be a short phrase (1-6 words) that hints at a story, not just a description. For example, "The adventurous little star" is better than "A little star".
-    For each suggestion, provide the text and a string with 1-2 relevant emojis.
-    Return the suggestions ONLY as a JSON array of objects, where each object has a "text" key (string) and an "emojis" key (string).
-    Example format: [
-      {"text": "A talking squirrel's big secret", "emojis": "🐿️🤫"},
-      {"text": "The magical paintbrush", "emojis": "🖌️✨"},
-      {"text": "The day the crayons quit", "emojis": "🖍️😠"},
-      {"text": "Lost in the candy kingdom", "emojis": "🍬👑"}
-    ]`;
+  
+  // Build prompt using our prompt builder function
+  const prompt = buildTopicSuggestionsPrompt(age, gender);
+  logger.info(`generateTopics: Prompting Gemini for user ${uid}`);
 
-  logger.info(`generateTopics: Prompting Gemini for user ${uid} (with emojis): ${prompt}`);
-
-  // 5. Generate Topics using Genkit
+  // 5. Generate Topics using our helper function
   try {
-    const result = await ai.generate({
-      model: gemini20Flash, // Specify the model
-      prompt: prompt,
-      config: { temperature: 0.8 }, // Adjust temperature for creativity
-      output: { format: "json" }, // Request JSON output directly
+    // Use our service's generate function with JSON output format
+    const topicsResult = await generate({
+      prompt, 
+      config: { 
+        apiKey,
+        temperature: 0.8
+      }, 
+      outputFormat: "json"
     });
+    
+    logger.info(`generateTopics: Received response for ${uid}`);
 
-    const topicsJson = result.text; // Access property directly
-    logger.info(`generateTopics: Received raw response for ${uid}: ${topicsJson}`);
-
-    // 6. Parse Updated Response Structure
-    try {
-      const topics: TopicSuggestion[] = JSON.parse(topicsJson || "[]"); // Parse JSON
-
+    // 6. Process the result
+    // Since we're using our generate function with JSON output, we should get a parsed object
+    if (Array.isArray(topicsResult)) {
+      const topics = topicsResult as TopicSuggestion[];
+      
       // Validate the structure
-      if (!Array.isArray(topics) ||
-        !topics.every((t) =>
-          typeof t === "object" &&
-          t !== null &&
-          typeof t.text === "string" &&
-          typeof t.emojis === "string"
-        )
-      ) {
-        logger.warn(`generateTopics: Parsed response is not a valid TopicSuggestion array for ${uid}. Raw: ${topicsJson}`);
-        // Attempt basic cleanup if it looks like maybe just text was returned
-        if (typeof topicsJson === "string") {
-          const simpleTopics = topicsJson.split("\n").map((t) => t?.trim() || "").filter(Boolean);
-          if (simpleTopics.length > 0) {
-            // Return with default/missing emojis if simple text list detected
-            return simpleTopics.map((text) => ({ text, emojis: "✨" }));
-          }
-        } else if (Array.isArray(topics) && topics.every((t) => typeof t === "string")) {
-          // Handle case where it returned array of strings instead of objects
-          return topics.map((text) => ({ text: text || "", emojis: "✨" }));
+      if (!topics.every((t) =>
+        typeof t === "object" &&
+        t !== null &&
+        typeof t.text === "string" &&
+        typeof t.emojis === "string"
+      )) {
+        logger.warn(`generateTopics: Response is not a valid TopicSuggestion array for ${uid}.`);
+        // Attempt basic cleanup
+        const validTopics = topics
+          .filter(t => t && typeof t === "object")
+          .map(t => ({
+            text: typeof t.text === "string" ? t.text : String(t.text || "Magical adventure"),
+            emojis: typeof t.emojis === "string" ? t.emojis : "✨"
+          }));
+          
+        if (validTopics.length > 0) {
+          return validTopics;
         }
-        throw new Error("Parsed response did not match expected format: [{text: string, emojis: string}].");
+        throw new Error("Response did not match expected format.");
       }
 
       logger.info(`generateTopics: Successfully generated topics for ${uid}:`, topics);
       return topics;
-    } catch (parseError) {
-      logger.error(`generateTopics: Failed to parse JSON response for ${uid}. Raw: ${topicsJson}`, parseError);
-      throw new HttpsError("internal", "Failed to parse AI model response.", parseError);
+    } else {
+      logger.error(`generateTopics: Response was not an array for ${uid}.`);
+      throw new HttpsError("internal", "AI model did not return an array response.");
     }
   } catch (error) {
-    logger.error(`generateTopics: Failed to generate topics using Genkit for user ${uid}:`, error);
+    logger.error(`generateTopics: Failed to generate topics for user ${uid}:`, error);
     throw new HttpsError("internal", "AI topic generation failed.", error);
   }
 });
