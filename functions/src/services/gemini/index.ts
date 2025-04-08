@@ -1,7 +1,11 @@
 import { genkit } from "genkit";
 import { googleAI, gemini20Flash } from "@genkit-ai/googleai";
 import { vertexAI } from "@genkit-ai/vertexai";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import * as logger from "firebase-functions/logger";
 import { defineString } from "firebase-functions/params";
 import { GenerateTextInput, GenerateImageInput, StoryPlan, StoryLength } from "types";
@@ -220,48 +224,95 @@ export async function generateSectionText(input: GenerateTextInput): Promise<str
  * @returns URL to the generated image or Base64 encoded image data
  */
 export async function generateImage(input: GenerateImageInput): Promise<string> {
+  let tempFilePath: string | null = null;
+
   try {
     logger.info("Generating image with prompt:", input.textPrompt);
-    
+
     // Retrieve the API key using the defined secret
     const apiKey = googleGenaiApiKey.value();
     if (!apiKey) {
       logger.error("Gemini API Key is not configured. Set GOOGLE_GENAI_API_KEY secret.");
       throw new Error("API key configuration error.");
     }
+
     // Cast explicitly to satisfy TypeScript
     const genAI = new GoogleGenAI({ apiKey });
-    
+    const fileManager = new GoogleAIFileManager(apiKey);
+
     // Prepare the content parts for the request
-    const contents: Array<string | { inlineData: { mimeType: string; data: string } }> = [];
-    
+    const contents: Array<string | { inlineData: { mimeType: string; data: string } } | { fileData: { mimeType: string; fileUri: string } }> = [];
+
     // Add text prompt
     contents.push(input.textPrompt);
-    
-    // Add character image if available
+
+    // Handle character image upload if available
     if (input.characterImageBase64) {
-      contents.push({
-        inlineData: {
-          mimeType: "image/png",
-          data: input.characterImageBase64
-        }
-      });
-      logger.info("Using multimodal prompt with character image for image generation");
+      logger.info("Character image provided, attempting upload...");
+      try {
+        // Decode base64, create buffer
+        // Remove data URI prefix if present (e.g., "data:image/png;base64,")
+        const base64Data = input.characterImageBase64.startsWith("data:")
+          ? input.characterImageBase64.substring(input.characterImageBase64.indexOf(",") + 1)
+          : input.characterImageBase64;
+        const imageBuffer = Buffer.from(base64Data, "base64");
+
+        // Create a temporary file path
+        const tempFileName = `temp-char-img-${Date.now()}.png`;
+        // Use os.tmpdir() for platform-agnostic temporary directory
+        tempFilePath = path.join(os.tmpdir(), tempFileName);
+
+        // Write buffer to temporary file
+        fs.writeFileSync(tempFilePath, imageBuffer);
+        logger.info(`Temporary image saved to: ${tempFilePath}`);
+
+        // Upload the file
+        const mimeType = "image/png"; // Assuming PNG, adjust if needed
+        const uploadResult = await fileManager.uploadFile(tempFilePath, {
+          mimeType,
+          displayName: "character-image.png",
+        });
+        const file = uploadResult.file;
+        logger.info(`Uploaded file ${file.displayName} as ${file.name} with URI: ${file.uri}`);
+
+        // Add file reference to contents
+        contents.push({
+          fileData: {
+            mimeType: file.mimeType,
+            fileUri: file.uri,
+          },
+        });
+        logger.info("Using multimodal prompt with uploaded character image file for generation.");
+
+      } catch (uploadError) {
+        logger.error("Failed to upload character image:", uploadError);
+        // Decide if you want to proceed without the image or throw an error
+        // For now, let's throw, as the image was explicitly provided.
+        throw new Error("Character image upload failed.");
+      }
+      // NOTE: Temporary file cleanup happens in the finally block
     }
-    
+
     logger.info("Sending image generation request with prompt");
-    
+
     // Send the request with image generation capability
     const response = await genAI.models.generateContent({
       model: "gemini-2.0-flash-exp-image-generation",
       contents,
       config: {
-        responseModalities: ["Text", "Image"],
+        responseModalities: ["image", "text"],
         temperature: input.config?.temperature || 0.7,
-        maxOutputTokens: input.config?.maxOutputTokens || 512
+        maxOutputTokens: input.config?.maxOutputTokens || 8192,
+        responseMimeType: "text/plain",
+        safetySettings: [
+          { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+          { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        ]
       }
     });
-    
+
     // Log the structure of the response
     logger.debug("Image generation response structure:", JSON.stringify({
       hasResponse: !!response,
@@ -270,7 +321,7 @@ export async function generateImage(input: GenerateImageInput): Promise<string> 
       candidatesLength: response.candidates?.length || 0,
       responseKeys: Object.keys(response)
     }));
-    
+
     // Process the response to find image data
     if (response.candidates && response.candidates.length > 0) {
       const candidate = response.candidates[0];
@@ -305,11 +356,27 @@ export async function generateImage(input: GenerateImageInput): Promise<string> 
     }
     
     // If we get here, no image was found in the response
-    logger.error("Image generation failed: No image data in response", JSON.stringify(response));
+    logger.error(
+      "Image generation failed: No image data found in response parts or text.", 
+      {
+        fullResponse: JSON.stringify(response) // Log the entire response object
+      }
+    );
     throw new Error("Image generation failed (no image data in response)");
   } catch (error) {
-    logger.error("Image generation failed:", error);
+    logger.error("Image generation failed with exception:", error);
     throw error;
+  } finally {
+    // Clean up the temporary file if it was created
+    if (tempFilePath) {
+      try {
+        fs.unlinkSync(tempFilePath);
+        logger.info(`Successfully deleted temporary file: ${tempFilePath}`);
+      } catch (cleanupError) {
+        logger.error(`Failed to delete temporary file ${tempFilePath}:`, cleanupError);
+        // Log the error but don't throw, as the main operation might have succeeded
+      }
+    }
   }
 }
 
