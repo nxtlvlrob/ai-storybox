@@ -296,7 +296,7 @@ export function StoryViewerScreen() {
 
   // Navigate to create new story
   const createNewStory = () => {
-    navigate('/create');
+    navigate('/create-story');
   };
 
   // Toggle text visibility

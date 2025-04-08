@@ -18,13 +18,23 @@ import { defineString } from "firebase-functions/params";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 
 // Import Gemini service functions
-import { 
-  generateStoryTitle, 
-  generateStoryPlan, 
-  generateStorySectionText, 
+import {
+  generateStoryTitle,
+  generateStoryPlan,
+  generateStorySectionText,
   generateStorySectionImage,
   generate
 } from "./services/gemini";
+
+// Import OpenAI service functions
+import {
+  generateOpenAIStoryTitle,
+  generateOpenAIStoryPlan,
+  generateOpenAIStorySectionText,
+  generateOpenAIStorySectionImage,
+  generateAndUploadOpenAIAudio,
+  OPENAI_VOICES
+} from "./services/openai";
 
 // Import types using the path alias
 import { StoryDocument, StoryStatus, StorySection, UserProfile } from "../../types";
@@ -32,11 +42,17 @@ import { StoryDocument, StoryStatus, StorySection, UserProfile } from "../../typ
 import { Resvg } from "@resvg/resvg-js";
 import { URL } from "url"; // Import the URL class from Node.js
 
+// Add import for ElevenLabs TTS service
+import { generateAndUploadElevenLabsAudio, ELEVENLABS_VOICES } from "./services/elevenlabs";
+
 // Firebase specific types
 export type StoryDocumentWriteData = Omit<StoryDocument, "createdAt" | "updatedAt"> & {
   createdAt: FieldValue | Timestamp;
   updatedAt: FieldValue | Timestamp;
 };
+
+// TTS Provider type
+export type TTSProvider = "google" | "elevenlabs" | "openai";
 
 // Define the secret parameter for the Gemini API Key
 const googleGenaiApiKey = defineString("GOOGLE_GENAI_API_KEY");
@@ -192,7 +208,7 @@ export const generateStoryPipeline = onDocumentCreated(
     // Include user's name in the story if available
     const userName = userProfile?.name || "the child";
     const userDescription = "A curious, adventurous child who loves to explore and discover new things.";
-    
+
     // User for visual descriptions
     // const userVisualDescription = `Main character ${userName}: ${userDescription}`;
 
@@ -204,7 +220,7 @@ export const generateStoryPipeline = onDocumentCreated(
 
       // Generate Title using our helper function
       title = await generateStoryTitle(
-        `${userName} (${userDescription})`, 
+        `${userName} (${userDescription})`,
         storyData.topic || "adventure"
       );
       logger.info(`[${storyId}] Generated title: "${title}"`);
@@ -215,7 +231,7 @@ export const generateStoryPipeline = onDocumentCreated(
         storyData.topic || "adventure",
         storyData.length
       );
-      
+
       if (plan.length === 0) {
         throw new Error("Generated plan was empty.");
       }
@@ -253,7 +269,7 @@ export const generateStoryPipeline = onDocumentCreated(
     // --- 5. Background Section Generation Loop (Refactored) ---
     let cumulativeStoryText = ""; // Initialize cumulative text string
     let previousSectionImageBase64: string | null = null; // Initialize previous image context
-    
+
     for (let index = 0; index < plan.length; index++) {
       const currentPlanItem = plan[index];
       let generatedText: string | null = null;
@@ -277,10 +293,10 @@ export const generateStoryPipeline = onDocumentCreated(
         );
 
         if (!generatedText) throw new Error("Text generation failed (empty content).");
-        
+
         // Append the newly generated text for the next iteration
         cumulativeStoryText += generatedText + "\n\n"; // Add spacing between sections
-        
+
         logger.info(`[${storyId}] Generated text for section ${index}.`);
       } catch (error) {
         logger.error(`[${storyId}] Text gen failed (sec ${index}):`, error);
@@ -294,7 +310,7 @@ export const generateStoryPipeline = onDocumentCreated(
 
       // --- 5b. Generate Image ---
       let currentSectionImageBase64: string | null = null; // To store the base64 result for the next iteration
-      
+
       try {
         const imageStatus: StoryStatus = `generating_image_${index}`;
         logger.info(`[${storyId}] Updating status to '${imageStatus}'`);
@@ -309,35 +325,35 @@ export const generateStoryPipeline = onDocumentCreated(
           actualPngBase64, // User character avatar (constant)
           previousSectionImageBase64 // Image from the previous section
         );
-        
+
         logger.info(`[${storyId}] Received base64 image data for section ${index}. Length: ${currentSectionImageBase64.length}`);
 
         // Always upload the returned base64 data to GCS
         logger.info(`[${storyId}] Uploading generated image to GCS for section ${index}...`);
-        
+
         // Extract base64 data (remove data URI prefix)
         const base64Data = currentSectionImageBase64.replace(/^data:image\/[^;]+;base64,/, "");
         const imageBuffer = Buffer.from(base64Data, "base64");
-        
+
         // Determine mime type from data URI if possible, default to png
         const mimeMatch = currentSectionImageBase64.match(/^data:(image\/[^;]+);base64,/);
         const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "image/png";
         const fileExtension = mimeType === "image/jpeg" ? "jpg" : "png"; // Basic extension mapping
-        
+
         // Define GCS path
         const imagePath = `stories/${storyId}/images/section_${index}.${fileExtension}`;
         const imageFile = storage.bucket().file(imagePath);
-        
+
         // Upload the image buffer to GCS
         await imageFile.save(imageBuffer, { metadata: { contentType: mimeType } });
         await imageFile.makePublic();
         generatedImageUrl = imageFile.publicUrl(); // Store the GCS URL for Firestore
-        
+
         logger.info(`[${storyId}] Image successfully uploaded for section ${index}. URL: ${generatedImageUrl}`);
-        
+
         // Update previous image context for the *next* iteration
         previousSectionImageBase64 = currentSectionImageBase64;
-        
+
       } catch (error) {
         logger.error(`[${storyId}] Image gen failed (sec ${index}):`, error);
         // Ensure error message includes the actual error if possible
@@ -361,38 +377,88 @@ export const generateStoryPipeline = onDocumentCreated(
           // Added safety check, though theoretically unreachable if 5a succeeded
           throw new Error("Cannot generate audio, generatedText is unexpectedly null.");
         }
+        
+        // Get TTS provider from story data or default to Google
+        const ttsProvider: TTSProvider = storyData.ttsProvider || "elevenlabs";
+        logger.info(`[${storyId}] Using TTS provider: ${ttsProvider} for section ${index}`);
+        
+        if (ttsProvider === "elevenlabs") {
+          // Use ElevenLabs TTS
+          const audioPath = `stories/${storyId}/audio/section_${index}.mp3`;
+          logger.info(`[${storyId}] Generating audio with ElevenLabs for section ${index}...`);
+          
+          // Use child voice based on story context
+          const voiceId = storyData.gender === "male" ? 
+            ELEVENLABS_VOICES.MALE_CHILD : 
+            ELEVENLABS_VOICES.FEMALE_CHILD;
+          
+          generatedAudioUrl = await generateAndUploadElevenLabsAudio(
+            generatedText,
+            audioPath,
+            {
+              voiceId,
+              stability: 0.6,
+              similarityBoost: 0.75
+            }
+          );
+          
+          logger.info(`[${storyId}] ElevenLabs audio successfully generated and uploaded for section ${index}. URL: ${generatedAudioUrl}`);
+        } else if (ttsProvider === "openai") {
+          // Use OpenAI TTS
+          const audioPath = `stories/${storyId}/audio/section_${index}.mp3`;
+          logger.info(`[${storyId}] Generating audio with OpenAI for section ${index}...`);
+          
+          // Use child voice based on story context
+          const voice = storyData.gender === "male" ? 
+            OPENAI_VOICES.MALE_CHILD : 
+            OPENAI_VOICES.FEMALE_CHILD;
+          
+          generatedAudioUrl = await generateAndUploadOpenAIAudio(
+            generatedText,
+            audioPath,
+            {
+              voice,
+              speed: 1.0
+            }
+          );
+          
+          logger.info(`[${storyId}] OpenAI audio successfully generated and uploaded for section ${index}. URL: ${generatedAudioUrl}`);
+        } else {
+          // Use Google TTS (default)
+          // **Updated TTS Request Configuration**
+          const ttsRequest = {
+            input: { text: generatedText },
+            // Updated Voice selection based on gender
+            voice: {
+              languageCode: "en-US",
+              name: storyData.gender === "male" ? 
+                "en-US-Journey-D" : // Male child-friendly voice
+                "en-US-Chirp-F",    // Female child-friendly voice
+            },
+            // Updated Audio Configuration
+            audioConfig: {
+              audioEncoding: "MP3" as const,
+              effectsProfileId: ["small-bluetooth-speaker-class-device"],
+              pitch: 0,
+              speakingRate: 1,
+            },
+          };
+          logger.info(`[${storyId}] Sending TTS request for section ${index} with config: ${JSON.stringify(ttsRequest)}`);
 
-        // **Updated TTS Request Configuration**
-        const ttsRequest = {
-          input: { text: generatedText },
-          // Updated Voice selection
-          voice: {
-            languageCode: "en-US",
-            name: "en-US-Chirp3-HD-Achernar", // New voice name
-          },
-          // Updated Audio Configuration
-          audioConfig: {
-            audioEncoding: "LINEAR16" as const, // New encoding
-            effectsProfileId: ["small-bluetooth-speaker-class-device"], // Added effects profile
-            pitch: 0, // Added pitch
-            speakingRate: 1, // Added speaking rate
-          },
-        };
-        logger.info(`[${storyId}] Sending TTS request for section ${index} with config: ${JSON.stringify(ttsRequest)}`); // Log the request config
+          const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
+          if (!ttsResponse.audioContent) throw new Error("TTS returned no audio content.");
+          logger.info(`[${storyId}] TTS response received for section ${index}. Content length: ${ttsResponse.audioContent.length}`);
 
-        const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
-        if (!ttsResponse.audioContent) throw new Error("TTS returned no audio content.");
-        logger.info(`[${storyId}] TTS response received for section ${index}. Content length: ${ttsResponse.audioContent.length}`);
+          // Upload audio to GCS
+          const audioPath = `stories/${storyId}/audio/section_${index}.mp3`;
+          const audioFile = storage.bucket().file(audioPath);
+          logger.info(`[${storyId}] Uploading audio content to ${audioPath}...`);
+          await audioFile.save(ttsResponse.audioContent as Buffer, { metadata: { contentType: "audio/mpeg" } });
+          await audioFile.makePublic();
+          generatedAudioUrl = audioFile.publicUrl(); // Store the URL
 
-        // Upload audio to GCS - **Update path and content type for WAV**
-        const audioPath = `stories/${storyId}/audio/section_${index}.wav`; // Changed extension to .wav
-        const audioFile = storage.bucket().file(audioPath);
-        logger.info(`[${storyId}] Uploading audio content to ${audioPath}...`);
-        await audioFile.save(ttsResponse.audioContent as Buffer, { metadata: { contentType: "audio/wav" } }); // Changed contentType to audio/wav
-        await audioFile.makePublic();
-        generatedAudioUrl = audioFile.publicUrl(); // Store the URL
-
-        logger.info(`[${storyId}] Audio successfully uploaded for section ${index}. URL: ${generatedAudioUrl}`);
+          logger.info(`[${storyId}] Audio successfully uploaded for section ${index}. URL: ${generatedAudioUrl}`);
+        }
       } catch (error) {
         // **More detailed error logging for TTS**
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -443,11 +509,11 @@ export const generateStoryPipeline = onDocumentCreated(
         // Log the whole array structure briefly (optional, can be large)
         // Add null check for updatedSections before mapping
         if (Array.isArray(updatedSections)) {
-          logger.debug(`[${storyId}] Full sections array structure before update (index ${index}): ${JSON.stringify(updatedSections.map(s => s ? { 
-            index: s.index, 
-            hasText: !!s.text, 
-            hasImg: !!s.imageUrl, 
-            hasAudio: !!s.audioUrl 
+          logger.debug(`[${storyId}] Full sections array structure before update (index ${index}): ${JSON.stringify(updatedSections.map(s => s ? {
+            index: s.index,
+            hasText: !!s.text,
+            hasImg: !!s.imageUrl,
+            hasAudio: !!s.audioUrl
           } : null), null, 2)}`);
         }
 
@@ -537,7 +603,7 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const age = userProfile.birthday ? Math.floor((Date.now() - (userProfile.birthday as any).toDate().getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 5; // Example age calculation
   const gender = userProfile.gender || "child"; // Default if gender not set
-  
+
   // Build prompt using our prompt builder function
   const prompt = buildTopicSuggestionsPrompt(age, gender);
   logger.info(`generateTopics: Prompting Gemini for user ${uid}`);
@@ -546,21 +612,21 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
   try {
     // Use our service's generate function with JSON output format
     const topicsResult = await generate({
-      prompt, 
-      config: { 
+      prompt,
+      config: {
         apiKey,
         temperature: 0.8
-      }, 
+      },
       outputFormat: "json"
     });
-    
+
     logger.info(`generateTopics: Received response for ${uid}`);
 
     // 6. Process the result
     // Since we're using our generate function with JSON output, we should get a parsed object
     if (Array.isArray(topicsResult)) {
       const topics = topicsResult as TopicSuggestion[];
-      
+
       // Validate the structure
       if (!topics.every((t) =>
         typeof t === "object" &&
@@ -576,7 +642,7 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
             text: typeof t.text === "string" ? t.text : String(t.text || "Magical adventure"),
             emojis: typeof t.emojis === "string" ? t.emojis : "✨"
           }));
-          
+
         if (validTopics.length > 0) {
           return validTopics;
         }
@@ -592,5 +658,192 @@ export const generateTopics = onCall(async (request): Promise<TopicSuggestion[]>
   } catch (error) {
     logger.error(`generateTopics: Failed to generate topics for user ${uid}:`, error);
     throw new HttpsError("internal", "AI topic generation failed.", error);
+  }
+});
+
+// === NEW: Test AI Services Function ===
+export const testAIServices = onCall(async (request) => {
+  // 1. Authentication Check
+  if (!request.auth) {
+    logger.error("testAIServices: Unauthenticated user.");
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
+  const uid = request.auth.uid;
+  logger.info(`testAIServices: Authenticated user: ${uid}`);
+
+  // Get test parameters from request
+  const { 
+    service = "openai", 
+    task = "title", 
+    characters, 
+    topic, 
+    sectionIndex = 0, 
+    planItem, 
+    previousText = "", 
+    gender = "male", 
+    ttsProvider = "openai" 
+  } = request.data || {};
+
+  // Validate parameters
+  if (!characters) {
+    throw new HttpsError("invalid-argument", "Missing 'characters' parameter");
+  }
+  if (!topic) {
+    throw new HttpsError("invalid-argument", "Missing 'topic' parameter");
+  }
+
+  try {
+    // Choose which service to use based on the request
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any;
+
+    // Variables used within switch cases
+    let testText: string;
+    let textToSpeak: string;
+    let testPath: string;
+    let voice: string;
+    let voiceId: string;
+
+    if (service === "openai") {
+      logger.info(`Testing OpenAI service for task: ${task}`);
+
+      switch (task) {
+      case "title":
+        result = await generateOpenAIStoryTitle(characters, topic);
+        break;
+      case "plan":
+        result = await generateOpenAIStoryPlan(characters, topic, "medium");
+        break;
+      case "text":
+        if (!planItem) {
+          throw new HttpsError("invalid-argument", "Missing 'planItem' parameter for text generation");
+        }
+        result = await generateOpenAIStorySectionText(
+          characters,
+          topic,
+          planItem,
+          sectionIndex,
+          3, // Assume 3 sections for testing
+          previousText
+        );
+        break;
+      case "image":
+        if (!planItem) {
+          throw new HttpsError("invalid-argument", "Missing 'planItem' parameter for image generation");
+        }
+        // For testing, we need some text content
+        testText = previousText || "This is a test section about a character on an adventure.";
+        result = await generateOpenAIStorySectionImage(characters, planItem, testText);
+        break;
+      case "tts":
+        if (!previousText && !planItem) {
+          throw new HttpsError("invalid-argument", "Missing 'text' parameter for TTS generation");
+        }
+        // Use either provided text or generate a placeholder
+        textToSpeak = previousText || "This is a test of text to speech capabilities.";
+        // Create a temporary storage path for testing
+        testPath = `test/${uid}/${new Date().getTime()}.mp3`;
+        
+        // Choose TTS provider based on parameter
+        if (ttsProvider === "openai") {
+          // Get voice based on gender parameter
+          voice = gender === "male" ? OPENAI_VOICES.MALE_CHILD : OPENAI_VOICES.FEMALE_CHILD;
+          result = await generateAndUploadOpenAIAudio(
+            textToSpeak,
+            testPath,
+            { voice }
+          );
+        } else if (ttsProvider === "elevenlabs") {
+          // Get voice based on gender parameter
+          voiceId = gender === "male" ? ELEVENLABS_VOICES.MALE_CHILD : ELEVENLABS_VOICES.FEMALE_CHILD;
+          result = await generateAndUploadElevenLabsAudio(
+            textToSpeak,
+            testPath,
+            { voiceId }
+          );
+        } else {
+          // Use Google TTS (default)
+          const ttsClient = new TextToSpeechClient();
+          const ttsRequest = {
+            input: { text: textToSpeak },
+            voice: {
+              languageCode: "en-US",
+              name: gender === "male" ? "en-US-Journey-D" : "en-US-Chirp-F",
+            },
+            audioConfig: {
+              audioEncoding: "MP3" as const,
+              pitch: 0,
+              speakingRate: 1,
+            },
+          };
+          const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
+          if (!ttsResponse.audioContent) throw new Error("TTS returned no audio content.");
+          
+          // Upload to Firebase Storage
+          const storage = admin.storage();
+          const audioFile = storage.bucket().file(testPath);
+          await audioFile.save(ttsResponse.audioContent as Buffer, { 
+            metadata: { contentType: "audio/mpeg" } 
+          });
+          await audioFile.makePublic();
+          result = audioFile.publicUrl();
+        }
+        break;
+      default:
+        throw new HttpsError("invalid-argument", `Unknown task: ${task}`);
+      }
+    } else {
+      // Default to Gemini
+      logger.info(`Testing Gemini service for task: ${task}`);
+
+      switch (task) {
+      case "title":
+        result = await generateStoryTitle(characters, topic);
+        break;
+      case "plan":
+        result = await generateStoryPlan(characters, topic, "medium");
+        break;
+      case "text":
+        if (!planItem) {
+          throw new HttpsError("invalid-argument", "Missing 'planItem' parameter for text generation");
+        }
+        result = await generateStorySectionText(
+          characters,
+          topic,
+          planItem,
+          sectionIndex,
+          3, // Assume 3 sections for testing
+          previousText
+        );
+        break;
+      case "image":
+        if (!planItem) {
+          throw new HttpsError("invalid-argument", "Missing 'planItem' parameter for image generation");
+        }
+        // For testing, we need some text content
+        // eslint-disable-next-line no-case-declarations
+        const testText = previousText || "This is a test section about a character on an adventure.";
+        result = await generateStorySectionImage(characters, planItem, testText);
+        break;
+      default:
+        throw new HttpsError("invalid-argument", `Unknown task: ${task}`);
+      }
+    }
+
+    logger.info(`AI service test completed successfully for ${service}/${task}`);
+    return {
+      service,
+      task,
+      result,
+      success: true,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    logger.error(`AI service test failed for ${service}/${task}:`, error);
+    throw new HttpsError(
+      "internal",
+      `AI service test failed: ${error instanceof Error ? error.message : String(error)}`,
+      error
+    );
   }
 });

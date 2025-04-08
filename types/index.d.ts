@@ -51,6 +51,8 @@ export interface StoryDocument {
     sections: StorySection[];         // Array containing generated content for each section
     createdAt: Timestamp | Date;      // Firestore timestamp when the job was created (Date on client)
     updatedAt?: Timestamp | Date;     // Firestore timestamp, updated by the Cloud Function (Date on client)
+    ttsProvider?: "google" | "elevenlabs" | "openai"; // The TTS provider to use for audio generation
+    gender?: "male" | "female";       // Gender for voice selection in TTS
 }
 
 /**
