@@ -375,6 +375,9 @@ export function StoryViewerScreen() {
     ? story.sections[currentSectionIndex] 
     : null;
 
+  // Early check for empty story sections array
+  const isEmptySections = Array.isArray(story.sections) && story.sections.length === 0;
+
   // Story player - now with fullscreen section view and swipe navigation
   return (
     <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-indigo-50 to-purple-50 overflow-hidden">
@@ -415,7 +418,22 @@ export function StoryViewerScreen() {
                 <img 
                   src={currentSection.imageUrl} 
                   alt={`Illustration for section ${currentSectionIndex + 1}`} 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain cursor-pointer"
+                  onClick={() => {
+                    if (currentSection.audioUrl) {
+                      if (currentAudio) {
+                        // Pause audio if playing
+                        audioRef.current?.pause();
+                        setCurrentAudio(null);
+                        audioRef.current = null;
+                        setIsAutoPlaying(false);
+                      } else {
+                        // Play audio if paused
+                        playAudio(currentSection.audioUrl, `${storyId}_${currentSectionIndex}`);
+                        setIsAutoPlaying(true);
+                      }
+                    }
+                  }}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center">
@@ -447,45 +465,26 @@ export function StoryViewerScreen() {
                 ))}
               </div>
               
-              {/* Play button overlay on image */}
-              {currentSection.audioUrl && !currentAudio && (
-                <button
-                  onClick={() => {
-                    playAudio(currentSection.audioUrl!, `${storyId}_${currentSectionIndex}`);
-                    setIsAutoPlaying(true);
-                  }}
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 hover:bg-white/90 text-indigo-600 p-6 rounded-full shadow-xl transition-all hover:scale-110 focus:outline-none focus:ring-4 focus:ring-indigo-300"
-                  aria-label="Play audio"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              )}
-              
-              {/* Pause button overlay when playing */}
-              {currentAudio && (
-                <button
-                  onClick={() => {
-                    audioRef.current?.pause();
-                    setCurrentAudio(null);
-                    audioRef.current = null;
-                    setIsAutoPlaying(false);
-                  }}
-                  className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 hover:bg-white/90 text-indigo-600 p-6 rounded-full shadow-xl transition-all hover:scale-110 focus:outline-none focus:ring-4 focus:ring-indigo-300"
-                  aria-label="Pause audio"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              )}
-              
               {/* Loading spinner when audio not ready */}
               {!currentSection.audioUrl && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 p-6 rounded-full shadow-xl">
                   <div className="w-10 h-10 border-4 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+                </div>
+              )}
+              
+              {/* Audio indicator overlay - small non-intrusive icon showing audio state */}
+              {currentSection.audioUrl && (
+                <div className="absolute bottom-16 right-4 bg-white/60 p-2 rounded-full shadow-md">
+                  {currentAudio ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
                 </div>
               )}
               
@@ -514,8 +513,27 @@ export function StoryViewerScreen() {
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-lg text-gray-600">No sections available</p>
+          <div className="h-full flex flex-col items-center justify-center">
+            {/* Show proper loading state for different conditions */}
+            {story.status && story.status !== 'complete' ? (
+              <div className="text-center p-6 bg-white/40 backdrop-blur-sm rounded-xl shadow-lg">
+                <div className="w-16 h-16 mx-auto border-4 border-indigo-300 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                <p className="text-lg text-indigo-600 font-medium">{formatStatus(story.status)}</p>
+                <p className="text-sm text-indigo-400 mt-2">Please wait while we prepare your story...</p>
+              </div>
+            ) : isEmptySections ? (
+              <div className="text-center p-6 bg-white/40 backdrop-blur-sm rounded-xl shadow-lg">
+                <p className="text-lg text-gray-600">This story doesn't have any content yet</p>
+                <button
+                  onClick={() => navigate('/home')}
+                  className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition"
+                >
+                  Back to Home
+                </button>
+              </div>
+            ) : (
+              <p className="text-lg text-gray-600">No sections available</p>
+            )}
           </div>
         )}
       </div>

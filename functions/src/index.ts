@@ -193,7 +193,7 @@ export const generateStoryPipeline = onDocumentCreated(
     const userDescription = "A curious, adventurous child who loves to explore and discover new things.";
     
     // User for visual descriptions
-    const userVisualDescription = `Main character ${userName}: ${userDescription}`;
+    // const userVisualDescription = `Main character ${userName}: ${userDescription}`;
 
     // --- 3. Generate Title and Plan (using Genkit) ---
     let title = "My Story"; // Default title
@@ -348,7 +348,7 @@ Respond ONLY with the story text for this section.`;
         await storyRef.update({ status: imageStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let imagePrompt: any;
+        let imagePrompt = [] as any;
         const baseTextPrompt = `Illustration in a ${STYLE_LOCK} style. Scene depicting: ${userName} (a young child who is the main character) ${generatedText}.`;
 
         // Check if we successfully got PNG base64 data from the user profile SVG
@@ -366,14 +366,21 @@ Respond ONLY with the story text for this section.`;
           logger.info(`[${storyId}] Using multimodal prompt with converted PNG avatar for section ${index}.`);
         } else {
           // Fallback to text-only prompt using descriptions
-          imagePrompt = `${baseTextPrompt}\n${userVisualDescription}`;
-          logger.info(`[${storyId}] Using text-only image prompt for section ${index}. PNG Base64 available: ${!!actualPngBase64}`);
+          imagePrompt = [
+            { text: baseTextPrompt },
+          ];
         }
+
+        console.log("imagePrompt", imagePrompt);
 
         const imageResult = await ai.generate({
           model: imagen3,
           prompt: imagePrompt, // Pass the constructed prompt
           output: { format: "media" },
+          config: {
+            // Request a landscape format image with dimensions close to 16:9
+            aspectRatio: "16:9",
+          }
         });
 
         logger.debug(`[${storyId}] Full imageResult.media object for section ${index}: ${JSON.stringify(imageResult?.media, null, 2)}`);
