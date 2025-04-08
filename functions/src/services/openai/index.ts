@@ -58,7 +58,7 @@ export const OPENAI_VOICES = {
 };
 
 // Default TTS model
-const DEFAULT_TTS_MODEL = "tts-1";
+const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 
 /**
  * Generate audio using OpenAI TTS API
