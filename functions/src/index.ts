@@ -251,6 +251,9 @@ export const generateStoryPipeline = onDocumentCreated(
     }
 
     // --- 5. Background Section Generation Loop (Refactored) ---
+    let cumulativeStoryText = ""; // Initialize cumulative text string
+    let previousSectionImageBase64: string | null = null; // Initialize previous image context
+    
     for (let index = 0; index < plan.length; index++) {
       const currentPlanItem = plan[index];
       let generatedText: string | null = null;
@@ -263,16 +266,20 @@ export const generateStoryPipeline = onDocumentCreated(
         logger.info(`[${storyId}] Updating status to '${textStatus}'`);
         await storyRef.update({ status: textStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // Generate section text using our helper function
+        // Generate section text using our helper function, passing previous context
         generatedText = await generateStorySectionText(
           `${userName} (${userDescription})`,
           storyData.topic || "adventure",
           currentPlanItem,
           index,
-          plan.length
+          plan.length,
+          cumulativeStoryText // Pass the text from previous sections
         );
 
         if (!generatedText) throw new Error("Text generation failed (empty content).");
+        
+        // Append the newly generated text for the next iteration
+        cumulativeStoryText += generatedText + "\n\n"; // Add spacing between sections
         
         logger.info(`[${storyId}] Generated text for section ${index}.`);
       } catch (error) {
@@ -286,42 +293,51 @@ export const generateStoryPipeline = onDocumentCreated(
       }
 
       // --- 5b. Generate Image ---
+      let currentSectionImageBase64: string | null = null; // To store the base64 result for the next iteration
+      
       try {
         const imageStatus: StoryStatus = `generating_image_${index}`;
         logger.info(`[${storyId}] Updating status to '${imageStatus}'`);
         await storyRef.update({ status: imageStatus, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-        // Generate image using our helper function
-        generatedImageUrl = await generateStorySectionImage(
+        // Generate image using our helper function, passing previous image data
+        // It now ALWAYS returns a base64 data URI string
+        currentSectionImageBase64 = await generateStorySectionImage(
           `${userName} (${userDescription})`,
           currentPlanItem,
-          generatedText,
-          actualPngBase64
+          generatedText, // Text must be non-null here from step 5a
+          actualPngBase64, // User character avatar (constant)
+          previousSectionImageBase64 // Image from the previous section
         );
+        
+        logger.info(`[${storyId}] Received base64 image data for section ${index}. Length: ${currentSectionImageBase64.length}`);
 
-        logger.info(`[${storyId}] Generated image for section ${index}: ${generatedImageUrl}`);
-
-        // Check if the result is a data URI or a GCS URL
-        if (generatedImageUrl.startsWith("data:image/png;base64,")) {
-          logger.warn(`[${storyId}] Image generation returned a base64 data URI for section ${index}. Uploading to GCS...`);
-
-          // Extract base64 data
-          const base64Data = generatedImageUrl.replace(/^data:image\/png;base64,/, "");
-          const imageBuffer = Buffer.from(base64Data, "base64");
-
-          // Define GCS path
-          const imagePath = `stories/${storyId}/images/section_${index}.png`;
-          const imageFile = storage.bucket().file(imagePath);
-
-          // Upload the image buffer to GCS
-          logger.info(`[${storyId}] Uploading base64 image to ${imagePath}...`);
-          await imageFile.save(imageBuffer, { metadata: { contentType: "image/png" } });
-          await imageFile.makePublic();
-          generatedImageUrl = imageFile.publicUrl(); // Store the GCS URL
-
-          logger.info(`[${storyId}] Base64 image successfully uploaded for section ${index}. URL: ${generatedImageUrl}`);
-        }
-
+        // Always upload the returned base64 data to GCS
+        logger.info(`[${storyId}] Uploading generated image to GCS for section ${index}...`);
+        
+        // Extract base64 data (remove data URI prefix)
+        const base64Data = currentSectionImageBase64.replace(/^data:image\/[^;]+;base64,/, "");
+        const imageBuffer = Buffer.from(base64Data, "base64");
+        
+        // Determine mime type from data URI if possible, default to png
+        const mimeMatch = currentSectionImageBase64.match(/^data:(image\/[^;]+);base64,/);
+        const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "image/png";
+        const fileExtension = mimeType === "image/jpeg" ? "jpg" : "png"; // Basic extension mapping
+        
+        // Define GCS path
+        const imagePath = `stories/${storyId}/images/section_${index}.${fileExtension}`;
+        const imageFile = storage.bucket().file(imagePath);
+        
+        // Upload the image buffer to GCS
+        await imageFile.save(imageBuffer, { metadata: { contentType: mimeType } });
+        await imageFile.makePublic();
+        generatedImageUrl = imageFile.publicUrl(); // Store the GCS URL for Firestore
+        
+        logger.info(`[${storyId}] Image successfully uploaded for section ${index}. URL: ${generatedImageUrl}`);
+        
+        // Update previous image context for the *next* iteration
+        previousSectionImageBase64 = currentSectionImageBase64;
+        
       } catch (error) {
         logger.error(`[${storyId}] Image gen failed (sec ${index}):`, error);
         // Ensure error message includes the actual error if possible

@@ -47,24 +47,31 @@ export function buildSectionTextPrompt(
   topic: string,
   planItem: string,
   sectionIndex: number,
-  totalSections: number
+  totalSections: number,
+  previousSectionsText: string
 ): string {
-  return `Write an engaging section of a children's story with these details:
+  const previousContext = sectionIndex > 0
+    ? `\n\n--- Previous Story Context ---\n${previousSectionsText}\n----------------------------\n\n`
+    : "";
+
+  return `Write an engaging section of a children's story based on the following details and context.
 Characters: ${characters}
 Topic: ${topic}
-Section description: ${planItem}
-Section position: ${sectionIndex + 1} of ${totalSections}
-
-Write approximately 150-200 words for this section. Make it age-appropriate for children 5-8 years old.
-Use simple vocabulary and short sentences that are easy to read aloud.
-Include dialogue between characters where appropriate.
-This section should ${sectionIndex === 0 
-    ? "introduce the characters and setting" 
-    : sectionIndex === totalSections - 1 
-      ? "provide a satisfying conclusion to the story" 
-      : "advance the plot in an engaging way"}.
-
-IMPORTANT: Respond with ONLY the section text, no titles or section numbers.`;
+Overall Plan Item for this Section: ${planItem}
+Section Position: ${sectionIndex + 1} of ${totalSections}${previousContext}
+Instructions for this section:
+- Write approximately 50-80 words.
+- Make it age-appropriate for children 5-8 years old.
+- Use simple vocabulary and short sentences suitable for reading aloud.
+- Include dialogue between characters where appropriate.
+- Ensure this section logically follows the 'Previous Story Context' (if provided) and smoothly transitions to the next part of the story based on the overall plan.
+- Specifically, this section should ${sectionIndex === 0
+    ? "introduce the characters and setting."
+    : sectionIndex === totalSections - 1
+      ? "provide a satisfying conclusion to the story, wrapping up the events from the previous context."
+      : `advance the plot based on the plan item ('${planItem}') and the previous context.`}
+  
+IMPORTANT: Respond with ONLY the generated text for this specific section (${sectionIndex + 1}). Do not repeat the previous context or include titles/section numbers in your response.`;
 }
 
 /**
@@ -75,21 +82,25 @@ export function buildImagePrompt(
   planItem: string,
   sectionText: string
 ): string {
-  return `Create a colorful, child-friendly illustration for a section of a children's story with these details:
+  // Note: We rely on the character avatar being passed into the generation model separately
+  // for primary character style reference. This prompt focuses on scene and style consistency.
+  return `Create an illustration for a section of a children's story based on the following details.
+
 Characters: ${characters}
-Scene description: ${planItem}
+Scene Description from Plan: ${planItem}
+Key Moment/Action from Text: ${sectionText.substring(0, 250)}...
 
-The scene should depict: ${sectionText.substring(0, 200)}...
+Style Guidelines:
+- Please generate this scene in a flat, vector-based cartoon style with bold, dark outlines defining all shapes.
+- The characters should have simple, stylized features consistent with the provided avatar's design (if an avatar was provided), including the use of clean lines and a focus on clear, expressive shapes. Create *original* characters based *only* on these descriptions.
+- **CRITICAL:** Avoid any resemblance to known copyrighted characters, brands, or specific art styles (e.g., do not make characters look like Thomas the Tank Engine, Disney characters, Peppa Pig, etc.). Focus on originality.
+- Aim for a clean and graphic aesthetic with a potentially subtle, uniform texture overall.
+- Ensure the style is consistent with any previously generated image context provided.
+- Include relevant background elements to establish the setting based on the text.
+- Focus on the main action described in the scene.
+- **Output Aspect Ratio:** Aim for a widescreen 16:9 aspect ratio (approximately 800x460 pixels).
 
-Style guidelines:
-- Create a bright, cheerful, and whimsical illustration suitable for children ages 5-8
-- Use a colorful, appealing palette with clean lines
-- Characters should be expressive and appealing, not scary
-- Create a storybook illustration style (like classic children's books)
-- Include relevant background elements to establish the setting
-- Focus on the main action described in the scene
-
-IMPORTANT: This is for a children's story, so keep the style friendly and appropriate for young children.`;
+IMPORTANT: Respond ONLY with the image. Keep the style friendly and appropriate for young children. Maintain visual consistency with the character reference and any previous image context. **Generate original designs, avoiding copyrighted styles/characters.**`;
 }
 
 /**

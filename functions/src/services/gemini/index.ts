@@ -63,6 +63,7 @@ export async function generateStorySectionText(
   planItem: string,
   sectionIndex: number,
   totalSections: number,
+  previousSectionsText: string,
   config?: { apiKey?: string; temperature?: number; maxOutputTokens?: number }
 ): Promise<string> {
   const prompt = buildSectionTextPrompt(
@@ -70,7 +71,8 @@ export async function generateStorySectionText(
     topic, 
     planItem, 
     sectionIndex, 
-    totalSections
+    totalSections,
+    previousSectionsText
   );
   return generateSectionText({ prompt, config });
 }
@@ -83,10 +85,11 @@ export async function generateStorySectionImage(
   planItem: string,
   sectionText: string,
   characterImageBase64?: string | null,
+  previousImageDataBase64?: string | null,
   config?: { apiKey?: string; temperature?: number; maxOutputTokens?: number }
 ): Promise<string> {
   const textPrompt = buildImagePrompt(characters, planItem, sectionText);
-  return generateImage({ textPrompt, characterImageBase64, config });
+  return generateImage({ textPrompt, characterImageBase64, previousImageDataBase64, config });
 }
 
 /**
@@ -218,84 +221,92 @@ export async function generateSectionText(input: GenerateTextInput): Promise<str
   }
 }
 
+// Extend the GenerateImageInput type to include the optional previous image
+interface GenerateImageInputExtended extends GenerateImageInput {
+  previousImageDataBase64?: string | null;
+}
+
 /**
  * Generate story image using Gemini native image generation
- * @param input The input parameters for image generation
- * @returns URL to the generated image or Base64 encoded image data
+ * @param input The input parameters for image generation, including optional previous image
+ * @returns Base64 encoded image data URI string
  */
-export async function generateImage(input: GenerateImageInput): Promise<string> {
-  let tempFilePath: string | null = null;
+export async function generateImage(input: GenerateImageInputExtended): Promise<string> {
+  const tempFilePaths: string[] = []; // Keep track of ALL temp files
+
+  // Helper function to upload base64 image and return file data part
+  async function uploadImagePart(
+    fileManager: GoogleAIFileManager,
+    base64Data: string,
+    displayName: string,
+    mimeType = "image/png"
+  ): Promise<{ fileData: { mimeType: string; fileUri: string } } | null> {
+    try {
+      const cleanBase64 = base64Data.startsWith("data:")
+        ? base64Data.substring(base64Data.indexOf(",") + 1)
+        : base64Data;
+      const imageBuffer = Buffer.from(cleanBase64, "base64");
+
+      const tempFileName = `temp-${displayName.replace(/[^a-z0-9]/gi, "_")}-${Date.now()}.png`;
+      const tempFilePath = path.join(os.tmpdir(), tempFileName);
+      tempFilePaths.push(tempFilePath); // Track for cleanup
+
+      fs.writeFileSync(tempFilePath, imageBuffer);
+      logger.info(`Temporary image saved to: ${tempFilePath} for ${displayName}`);
+
+      const uploadResult = await fileManager.uploadFile(tempFilePath, { mimeType, displayName });
+      const file = uploadResult.file;
+      logger.info(`Uploaded ${displayName}: ${file.name} (URI: ${file.uri})`);
+
+      return {
+        fileData: {
+          mimeType: file.mimeType,
+          fileUri: file.uri,
+        },
+      };
+    } catch (uploadError) {
+      logger.error(`Failed to upload ${displayName}:`, uploadError);
+      // Allow proceeding without the image if upload fails, but log it
+      return null;
+    }
+  }
 
   try {
     logger.info("Generating image with prompt:", input.textPrompt);
 
-    // Retrieve the API key using the defined secret
     const apiKey = googleGenaiApiKey.value();
     if (!apiKey) {
       logger.error("Gemini API Key is not configured. Set GOOGLE_GENAI_API_KEY secret.");
       throw new Error("API key configuration error.");
     }
 
-    // Cast explicitly to satisfy TypeScript
     const genAI = new GoogleGenAI({ apiKey });
     const fileManager = new GoogleAIFileManager(apiKey);
 
-    // Prepare the content parts for the request
-    const contents: Array<string | { inlineData: { mimeType: string; data: string } } | { fileData: { mimeType: string; fileUri: string } }> = [];
+    const contents: Array<string | { fileData: { mimeType: string; fileUri: string } }> = [input.textPrompt];
 
-    // Add text prompt
-    contents.push(input.textPrompt);
-
-    // Handle character image upload if available
+    // Upload character image (if provided)
     if (input.characterImageBase64) {
-      logger.info("Character image provided, attempting upload...");
-      try {
-        // Decode base64, create buffer
-        // Remove data URI prefix if present (e.g., "data:image/png;base64,")
-        const base64Data = input.characterImageBase64.startsWith("data:")
-          ? input.characterImageBase64.substring(input.characterImageBase64.indexOf(",") + 1)
-          : input.characterImageBase64;
-        const imageBuffer = Buffer.from(base64Data, "base64");
-
-        // Create a temporary file path
-        const tempFileName = `temp-char-img-${Date.now()}.png`;
-        // Use os.tmpdir() for platform-agnostic temporary directory
-        tempFilePath = path.join(os.tmpdir(), tempFileName);
-
-        // Write buffer to temporary file
-        fs.writeFileSync(tempFilePath, imageBuffer);
-        logger.info(`Temporary image saved to: ${tempFilePath}`);
-
-        // Upload the file
-        const mimeType = "image/png"; // Assuming PNG, adjust if needed
-        const uploadResult = await fileManager.uploadFile(tempFilePath, {
-          mimeType,
-          displayName: "character-image.png",
-        });
-        const file = uploadResult.file;
-        logger.info(`Uploaded file ${file.displayName} as ${file.name} with URI: ${file.uri}`);
-
-        // Add file reference to contents
-        contents.push({
-          fileData: {
-            mimeType: file.mimeType,
-            fileUri: file.uri,
-          },
-        });
-        logger.info("Using multimodal prompt with uploaded character image file for generation.");
-
-      } catch (uploadError) {
-        logger.error("Failed to upload character image:", uploadError);
-        // Decide if you want to proceed without the image or throw an error
-        // For now, let's throw, as the image was explicitly provided.
-        throw new Error("Character image upload failed.");
+      logger.info("Character avatar provided, attempting upload...");
+      const characterImagePart = await uploadImagePart(fileManager, input.characterImageBase64, "character-avatar");
+      if (characterImagePart) {
+        contents.push(characterImagePart);
+        logger.info("Added character avatar reference to prompt.");
       }
-      // NOTE: Temporary file cleanup happens in the finally block
     }
 
-    logger.info("Sending image generation request with prompt");
+    // Upload previous image context (if provided)
+    if (input.previousImageDataBase64) {
+      logger.info("Previous image context provided, attempting upload...");
+      const previousImagePart = await uploadImagePart(fileManager, input.previousImageDataBase64, "previous-image");
+      if (previousImagePart) {
+        contents.push(previousImagePart);
+        logger.info("Added previous image context reference to prompt.");
+      }
+    }
 
-    // Send the request with image generation capability
+    logger.info(`Sending image generation request with ${contents.length - 1} image inputs.`);
+
     const response = await genAI.models.generateContent({
       model: "gemini-2.0-flash-exp-image-generation",
       contents,
@@ -313,70 +324,59 @@ export async function generateImage(input: GenerateImageInput): Promise<string> 
       }
     });
 
-    // Log the structure of the response
     logger.debug("Image generation response structure:", JSON.stringify({
       hasResponse: !!response,
       hasText: !!response.text,
       hasCandidates: !!response.candidates,
       candidatesLength: response.candidates?.length || 0,
-      responseKeys: Object.keys(response)
-    }));
+    }, null, 2));
 
     // Process the response to find image data
     if (response.candidates && response.candidates.length > 0) {
       const candidate = response.candidates[0];
       if (candidate.content && candidate.content.parts) {
-        const parts = candidate.content.parts;
-        
-        // Look for the generated image in the response parts
-        for (const part of parts) {
+        for (const part of candidate.content.parts) {
           if (part.inlineData && part.inlineData.data) {
-            // Return the base64 encoded image data with MIME type
-            logger.info("Image generated successfully (base64 data)");
-            return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+            const mimeType = part.inlineData.mimeType || "image/png";
+            logger.info(`Image generated successfully (base64 data, mime: ${mimeType})`);
+            return `data:${mimeType};base64,${part.inlineData.data}`; // ALWAYS return base64 data URI
           }
-        }
-        
-        // If no image found but text is present, log it for debugging
-        for (const part of parts) {
-          if (part.text) {
-            logger.warn("Image generation returned text instead of image:", part.text);
+          if (part.text) { // Log any text part found
+            logger.warn("Image generation returned text part:", part.text);
           }
         }
       }
     }
-    
-    // If the response contains text directly, check if it's a URL or data URL
+
+    // Check for text response as fallback (e.g., error message from model)
     if (response.text) {
       const text = response.text.trim();
-      if (text.startsWith("data:image/") || text.match(/https?:\/\/[\w.-]+/)) {
-        logger.info("Image URL found in text response");
-        return text;
-      }
+      logger.error("Image generation failed: Model returned only text.", { responseText: text });
+      throw new Error(`Image generation failed: Model returned text - ${text.substring(0, 100)}`);
     }
-    
-    // If we get here, no image was found in the response
+
+    // If we get here, no image data was found, log the full response
     logger.error(
-      "Image generation failed: No image data found in response parts or text.", 
-      {
-        fullResponse: JSON.stringify(response) // Log the entire response object
-      }
+      "Image generation failed: No image data found in response parts.",
+      { fullResponse: JSON.stringify(response) }
     );
     throw new Error("Image generation failed (no image data in response)");
+
   } catch (error) {
     logger.error("Image generation failed with exception:", error);
-    throw error;
+    throw error; // Re-throw the error after logging
   } finally {
-    // Clean up the temporary file if it was created
-    if (tempFilePath) {
-      try {
-        fs.unlinkSync(tempFilePath);
-        logger.info(`Successfully deleted temporary file: ${tempFilePath}`);
-      } catch (cleanupError) {
-        logger.error(`Failed to delete temporary file ${tempFilePath}:`, cleanupError);
-        // Log the error but don't throw, as the main operation might have succeeded
+    // Clean up ALL temporary files
+    tempFilePaths.forEach(tempFilePath => {
+      if (fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+          logger.info(`Successfully deleted temporary file: ${tempFilePath}`);
+        } catch (cleanupError) {
+          logger.error(`Failed to delete temporary file ${tempFilePath}:`, cleanupError);
+        }
       }
-    }
+    });
   }
 }
 
