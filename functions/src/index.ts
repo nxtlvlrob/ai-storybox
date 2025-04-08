@@ -379,7 +379,7 @@ export const generateStoryPipeline = onDocumentCreated(
         }
         
         // Get TTS provider from story data or default to Google
-        const ttsProvider: TTSProvider = storyData.ttsProvider || "elevenlabs";
+        const ttsProvider: TTSProvider = storyData.ttsProvider || "openai";
         logger.info(`[${storyId}] Using TTS provider: ${ttsProvider} for section ${index}`);
         
         if (ttsProvider === "elevenlabs") {

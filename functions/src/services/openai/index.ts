@@ -51,7 +51,7 @@ export interface OpenAITTSConfig {
 
 // Default OpenAI voices
 export const OPENAI_VOICES = {
-  FEMALE_YOUNG: "nova", // Young female voice
+  FEMALE_YOUNG: "shimmer", // Young female voice
   MALE_YOUNG: "echo", // Young male voice
   FEMALE_CHILD: "alloy", // Neutral voice that can sound like a child
   MALE_CHILD: "fable", // Friendly, warm voice that can work for a child

@@ -6,7 +6,6 @@
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { defineString } from "firebase-functions/params";
-import fetch from "node-fetch";
 
 // Define the secret parameter for the ElevenLabs API Key
 const elevenLabsApiKey = defineString("ELEVENLABS_API_KEY");
@@ -60,6 +59,9 @@ export async function generateElevenLabsAudio(
   
   try {
     logger.info(`Sending TTS request to ElevenLabs for text (${text.length} chars) with voice ${voiceId}`);
+    
+    // Dynamically import fetch
+    const { default: fetch } = await import("node-fetch");
     
     // Make request to ElevenLabs API
     const response = await fetch(elevenLabsTtsUrl, {
