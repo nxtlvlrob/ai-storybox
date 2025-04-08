@@ -1,51 +1,60 @@
 import { useNavigate } from 'react-router-dom'
 import { useProfile } from '../context/profile-context'; // Import useProfile
+import { useTopics } from '../context/topics-context'; // Import the context hook
 
 export function HomeScreen() {
   const navigate = useNavigate()
   const { userProfile, profileLoading } = useProfile(); // Get profile data
+  const { isLoadingTopics, topicsError } = useTopics(); // Get state from context, fetchTopics is no longer needed here
 
   // Display loading or placeholder while profile loads
   const displayName = profileLoading ? '...' : (userProfile?.name || 'Adventurer');
   const avatarUrl = userProfile?.avatarUrl; 
 
+  function handleStartStory() {
+    navigate('/create-story');
+  }
+
+  function handleViewMyStories() {
+    navigate('/my-stories');
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-100 p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 text-white p-4">
       {/* Avatar Display */}
-      <div className="w-32 h-32 mb-4 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-blue-300">
+      <div className="w-32 h-32 mb-6 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-purple-300">
         {profileLoading ? (
           <span className="text-gray-400 text-sm">Loading...</span>
         ) : avatarUrl ? (
           <img src={avatarUrl} alt="User Avatar" className="w-full h-full object-cover" />
         ) : (
-          <span className="text-gray-400 text-sm">No Avatar</span>
+          <span className="text-purple-600 text-2xl font-bold">{displayName.charAt(0)}</span> // Fallback initial
         )}
       </div>
+
+      <h1 className="text-4xl sm:text-5xl font-bold mb-8 drop-shadow-lg text-center">Welcome to AI StoryBox, {displayName}!</h1>
+      <p className="text-lg sm:text-xl mb-10 sm:mb-12 text-center max-w-md drop-shadow-md">
+        Create magical, personalized stories for your little ones with the power of AI.
+      </p>
       
-      {/* Welcome Message */}
-      <h1 className="text-3xl font-bold mb-6">Welcome, {displayName}!</h1>
-      
-      {/* Navigation Buttons */}
-      <div className="flex flex-col sm:flex-row items-center gap-4">
+      <div className="space-y-4 sm:space-y-6">
         <button 
-          className="px-6 py-3 w-48 bg-blue-500 text-white text-lg rounded-lg shadow hover:bg-blue-600"
-          onClick={() => navigate('/create-story')}
+          onClick={handleStartStory} 
+          className="w-60 sm:w-64 px-6 sm:px-8 py-3 sm:py-4 bg-white border-2 border-white mx-4 text-purple-600 font-semibold rounded-lg shadow-lg hover:bg-gray-100 transition duration-300 ease-in-out text-base sm:text-lg transform hover:scale-105"
         >
-          Create a Story
+          ✨ Start a New Story
         </button>
         <button 
-          className="px-6 py-3 w-48 bg-green-500 text-white text-lg rounded-lg shadow hover:bg-green-600"
-          onClick={() => navigate('/my-stories')}
+          onClick={handleViewMyStories} 
+          className="w-60 sm:w-64 px-6 sm:px-8 py-3 sm:py-4 bg-transparent border-2 border-white mx-4 text-white font-semibold rounded-lg shadow-lg hover:bg-white hover:bg-opacity-20 transition duration-300 ease-in-out text-base sm:text-lg transform hover:scale-105"
         >
-          My Stories
-        </button>
-        <button 
-          className="px-6 py-3 w-48 bg-gray-500 text-white text-lg rounded-lg shadow hover:bg-gray-600"
-          onClick={() => navigate('/settings')}
-        >
-          Settings
+          📚 My Stories
         </button>
       </div>
+
+      {/* Display Topic Loading/Error for debugging */}
+      {isLoadingTopics && <div className="mt-6 text-sm text-yellow-200">Fetching topic suggestions...</div>}
+      {topicsError && <div className="mt-6 text-sm text-red-200">Error fetching topics: {topicsError}</div>}
     </div>
   )
 } 
