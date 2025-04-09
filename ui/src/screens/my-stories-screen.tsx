@@ -155,9 +155,9 @@ export function MyStoriesScreen() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-purple-50 to-indigo-50">
-        <div className="w-20 h-20 rounded-full border-4 border-t-purple-600 border-r-indigo-600 border-b-blue-600 border-l-transparent animate-spin mb-4"></div>
-        <h2 className="text-xl font-semibold text-purple-800">Loading your stories...</h2>
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100">
+        <div className="w-20 h-20 rounded-full border-4 border-t-blue-600 border-r-blue-400 border-b-blue-400 border-l-transparent animate-spin mb-4"></div>
+        <h2 className="text-xl font-semibold text-gray-700">Loading your stories...</h2>
       </div>
     );
   }
@@ -165,15 +165,15 @@ export function MyStoriesScreen() {
   // Error state
   if (error) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-red-50 to-pink-50 p-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-red-100 p-4">
         <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
-          <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
+          <h2 className="text-xl font-semibold text-red-600 mb-2">Error</h2>
           <p className="text-gray-700 mb-4">{error}</p>
           <button 
-            onClick={() => navigate('/home')}
-            className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            onClick={() => navigate(-1)}
+            className="w-full px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 transition text-sm font-medium"
           >
-            Back to Home
+            Back
           </button>
         </div>
       </div>
@@ -181,23 +181,14 @@ export function MyStoriesScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-purple-50 pb-12">
-      {/* Header with navigation */}
-      <header className="sticky top-0 bg-white/90 backdrop-blur-sm shadow-sm px-4 py-3 flex justify-between items-center z-10">
-        <button 
-          className="px-3 py-1 bg-gray-100 rounded-full shadow-sm hover:bg-gray-200 text-sm transition"
-          onClick={() => navigate('/home')}
-        >
-          ← Home
-        </button>
-        <h1 className="text-xl font-bold text-purple-900">My Stories</h1>
-        <button 
-          className="px-3 py-1 bg-purple-100 rounded-full shadow-sm hover:bg-purple-200 text-sm text-purple-800 transition"
-          onClick={handleCreateStory}
-        >
-          + New Story
-        </button>
-      </header>
+    <div className="min-h-screen bg-blue-100 pb-12 relative">
+      {/* Back Button */}
+      <button 
+        className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500 z-10"
+        onClick={() => navigate(-1)} // Go back
+      >
+        Back
+      </button>
 
       {/* Main content - Two column story grid */}
       <main className="container mx-auto px-4 py-6 max-w-4xl">
@@ -206,11 +197,11 @@ export function MyStoriesScreen() {
             <div className="w-20 h-20 mx-auto mb-4 text-4xl flex items-center justify-center">
               📚
             </div>
-            <h2 className="text-xl font-semibold text-purple-900 mb-2">No Stories Yet</h2>
+            <h2 className="text-xl font-semibold text-blue-900 mb-2">No Stories Yet</h2>
             <p className="text-gray-600 mb-6">Start creating your first magical story!</p>
             <button
               onClick={handleCreateStory}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl shadow hover:shadow-lg transition transform hover:scale-105"
+              className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow hover:bg-blue-700 transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               Create Your First Story
             </button>
@@ -265,22 +256,15 @@ export function MyStoriesScreen() {
                             e.stopPropagation();
                             handleStoryClick(story.id);
                           }}
-                          className="w-full text-left px-4 py-2 text-gray-700 hover:bg-purple-50 flex items-center gap-2"
+                          className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Play
+                          View Story
                         </button>
                         <button 
                           onClick={(e) => confirmDeleteStory(e, story)}
-                          className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          className="block w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50 focus:bg-red-50 focus:outline-none"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete
+                          Delete Story
                         </button>
                       </div>
                     )}
@@ -298,33 +282,27 @@ export function MyStoriesScreen() {
 
       {/* Delete Confirmation Modal */}
       {storyToDelete && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full animate-pop-in">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Story</h3>
-            <p className="text-gray-700 mb-6">
-              Are you sure you want to delete "{storyToDelete.title}"? This action cannot be undone.
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Confirm Deletion</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete the story "<strong className="font-medium">{storyToDelete.title}</strong>"?
+              This action cannot be undone.
             </p>
-            <div className="flex gap-3">
+            <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelDelete}
-                className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm font-medium transition"
                 disabled={isDeleting}
               >
                 Cancel
               </button>
               <button
                 onClick={deleteStory}
-                className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center justify-center"
                 disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 text-sm font-medium transition disabled:opacity-50"
               >
-                {isDeleting ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
+                {isDeleting ? 'Deleting...' : 'Delete Story'}
               </button>
             </div>
           </div>

@@ -56,18 +56,19 @@ export function SettingsScreen() {
   } : undefined;
 
   return (
-    <div className="flex flex-col items-center justify-start pt-6 h-screen bg-lime-100 overflow-y-auto px-4">
+    <div className="flex flex-col items-center justify-start pt-6 h-screen bg-blue-100 overflow-y-auto px-4">
       <div className="w-full max-w-3xl flex items-center justify-between mb-6">
         <button 
-          className="px-4 py-2 bg-gray-300 rounded shadow hover:bg-gray-400 text-sm sm:text-base flex-shrink-0 w-28 text-center"
-          onClick={() => isEditing ? handleCancelEdit() : navigate('/home')} 
+          className="px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500 flex-shrink-0"
+          onClick={() => isEditing ? handleCancelEdit() : navigate(-1)}
         >
-          {isEditing ? 'Cancel' : 'Back to Home'}
+          {isEditing ? 'Cancel' : 'Back'}
         </button>
         
-        <h1 className="text-2xl sm:text-3xl font-bold text-lime-800 flex-grow text-center">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-blue-800 flex-grow text-center px-4">Settings</h1>
 
-        <div className="w-28 flex-shrink-0">
+        <div className="flex-shrink-0 invisible" aria-hidden="true">
+           <button className="px-3 py-1.5 rounded-lg text-sm">Back</button>
         </div>
       </div>
 
@@ -99,44 +100,52 @@ export function SettingsScreen() {
           </div>
         )
       ) : (
-        <div className="flex flex-col items-center w-full max-w-md">
+        <div className="flex flex-col items-center w-full max-w-xl">
           <p className="mb-6 text-center px-4">Adjust Storybox settings here.</p>
           {profileLoading ? (
             <p>Loading profile...</p>
           ) : userProfile ? (
             <div className="space-y-4 flex flex-col items-center w-full">
-              <div className="bg-white p-4 rounded-lg shadow-md w-72 text-center">
-                 {userProfile.avatarUrl ? (
-                    <img src={userProfile.avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full mx-auto mb-3 border-2 border-gray-300" />
-                 ) : (
-                   <div className="w-20 h-20 rounded-full mx-auto mb-3 bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
-                     No Avatar
+              <div className="bg-white p-6 rounded-lg shadow-md w-full flex flex-col md:flex-row items-center md:items-start gap-6">
+                 <div className="flex-shrink-0 mx-auto md:mx-0">
+                   {userProfile.avatarUrl ? (
+                     <img src={userProfile.avatarUrl} alt="Avatar" className="w-28 h-28 rounded-full border-2 border-gray-300" />
+                   ) : (
+                     <div className="w-28 h-28 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-base">
+                       No Avatar
+                     </div>
+                   )}
+                 </div>
+                 
+                 <div className="flex-grow flex flex-col items-center md:items-start w-full">
+                   <p className="text-xl font-semibold mb-1 text-center md:text-left">{userProfile.name}</p>
+                   {(userProfile.birthday instanceof Timestamp || userProfile.birthday instanceof Date) && (
+                       <p className="text-sm text-gray-600 mb-1 text-center md:text-left">
+                         Birthday: {userProfile.birthday instanceof Timestamp 
+                                     ? userProfile.birthday.toDate().toLocaleDateString() 
+                                     : userProfile.birthday.toLocaleDateString()}
+                       </p>
+                   )}
+                   {userProfile.gender && (
+                       <p className="text-sm text-gray-600 mb-4 text-center md:text-left">Gender: {userProfile.gender}</p>
+                   )}
+                   
+                   <div className="mt-4 pt-4 border-t border-gray-200 w-full flex flex-col sm:flex-row items-center justify-center md:justify-start space-y-3 sm:space-y-0 sm:space-x-3">
+                     <button
+                       onClick={handleEditProfileClick}
+                       className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                     >
+                       Edit Profile
+                     </button>
+                     <button 
+                        onClick={handleEditAvatarClick}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-green-500 text-white text-sm font-semibold rounded-lg shadow hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                     >
+                       Edit Avatar
+                     </button>
                    </div>
-                 )}
-                 <p className="text-lg font-semibold">{userProfile.name}</p>
-                 {(userProfile.birthday instanceof Timestamp || userProfile.birthday instanceof Date) && (
-                     <p className="text-sm text-gray-600">
-                       Birthday: {userProfile.birthday instanceof Timestamp 
-                                   ? userProfile.birthday.toDate().toLocaleDateString() 
-                                   : userProfile.birthday.toLocaleDateString()}
-                     </p>
-                 )}
-                 {userProfile.gender && (
-                     <p className="text-sm text-gray-600">Gender: {userProfile.gender}</p>
-                 )}
+                 </div>
               </div>
-              <button
-                onClick={handleEditProfileClick}
-                className="w-60 px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg shadow hover:bg-blue-600"
-              >
-                Edit Profile Details
-              </button>
-               <button 
-                  onClick={handleEditAvatarClick}
-                  className="w-60 px-6 py-2 bg-green-500 text-white font-semibold rounded-lg shadow hover:bg-green-600"
-               >
-                 Edit Avatar
-               </button>
             </div>
           ) : (
             <p>Could not load profile.</p>

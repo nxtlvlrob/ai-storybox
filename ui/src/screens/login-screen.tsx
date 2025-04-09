@@ -20,6 +20,7 @@ export function LoginScreen() {
   // Login handler
   async function handleLogin(event?: React.FormEvent) {
     event?.preventDefault();
+    if (!email || !password) return; // Prevent login if fields are empty
     setLoading(true);
     setLoginError(null);
     setInputFocus(null); // Hide keyboard on submit
@@ -63,7 +64,15 @@ export function LoginScreen() {
   function handleKeyPress(button: string) {
     if (button === "{shift}" || button === "{lock}") handleShift();
     if (button === "{enter}") handleLogin();
-    if (button === "{done}") setInputFocus(null);
+    if (button === "{done}") {
+      if (inputFocus === 'email') {
+        showKeyboard('password');
+      } else if (inputFocus === 'password') {
+        handleLogin();
+      } else {
+         setInputFocus(null);
+      }
+    }
   }
 
   function handleShift() {
@@ -88,11 +97,28 @@ export function LoginScreen() {
     }
   }, [inputFocus, email, password]);
 
+  // --- Dynamic Keyboard Display ---
+  const getKeyboardDisplay = () => {
+    const baseDisplay = {
+      '{enter}': 'Enter',
+      '{shift}': '⇧',
+      '{space}': ' ',
+      '{backspace}': '⌫',
+    };
+    if (inputFocus === 'email') {
+      return { ...baseDisplay, '{done}': 'Continue' };
+    }
+    if (inputFocus === 'password') {
+      return { ...baseDisplay, '{done}': 'Login' };
+    }
+    return { ...baseDisplay, '{done}': 'Hide' };
+  };
+
   return (
     <div className="flex flex-col items-center justify-between h-screen bg-sky-100 overflow-hidden">
       {/* Login Form Area */} 
       <form onSubmit={handleLogin} className="w-full max-w-sm flex-grow flex flex-col justify-center pt-4 pb-2">
-        <h1 className="text-2xl font-bold text-sky-800 text-center mb-6">Storybox Sign In</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-sky-800 text-center mb-6">Storybox Sign In</h1>
         
         <div className="space-y-4 bg-white p-5 rounded-lg shadow-md">
           {/* Email Input Display */} 
@@ -125,7 +151,7 @@ export function LoginScreen() {
         <button 
           type="submit"
           disabled={loading || !email || !password}
-          className="mt-6 mb-2 self-center px-8 py-3 bg-blue-600 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-sky-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-6 mb-2 self-center px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-sky-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Signing In...' : 'Sign In'}
         </button>
@@ -155,11 +181,9 @@ export function LoginScreen() {
                 '{space} {done}'
               ]
             }}
-            display={{
-              '{enter}': 'Enter', '{shift}': '⇧', '{space}': ' ', '{backspace}': '⌫', '{done}': 'Hide'
-            }}
-            theme={"hg-theme-default hg-layout-default my-keyboard-theme"} 
-            inputName={inputFocus}
+            display={getKeyboardDisplay()}
+            theme={"hg-theme-default hg-layout-default my-keyboard-theme"}
+            inputName={inputFocus || undefined}
           />
         )}
       </div>

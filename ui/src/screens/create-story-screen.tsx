@@ -108,8 +108,8 @@ export function CreateStoryScreen() {
 
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-100 p-4 max-h-screen overflow-hidden">
-      <h1 className="text-3xl font-bold mb-4 text-gray-800">Choose Your Story Topic</h1>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-blue-100 p-4 max-h-screen overflow-hidden relative">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-800">Choose Your Story Topic</h1>
       {/* TODO: Add theme/preference selection */}
 
       {/* Loading State */}
@@ -121,7 +121,9 @@ export function CreateStoryScreen() {
       {topicsError && (
         <div className="text-red-600 bg-red-100 p-3 rounded mb-4">
           {topicsError} 
-          <button onClick={fetchTopics} className="ml-2 px-2 py-1 bg-red-500 text-white rounded text-sm">Retry</button>
+          <button onClick={fetchTopics} className="ml-2 px-3 py-1.5 bg-red-500 text-white rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1">
+              Retry
+          </button>
         </div>
       )}
 
@@ -137,7 +139,7 @@ export function CreateStoryScreen() {
                 className={`flex flex-col items-center justify-center p-2 rounded-lg shadow-md transition duration-200 ease-in-out focus:outline-none h-22 sm:h-22 text-center ${
                   isSelected 
                     ? 'bg-green-500 text-white ring-2 ring-offset-2 ring-green-400' 
-                    : 'bg-purple-500 text-white hover:bg-purple-600 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-75'
+                    : 'bg-purple-500 text-white hover:bg-purple-600 focus:ring-2 focus:ring-purple-400 focus:ring-offset-2'
                 }`}
               >
                 <Twemoji options={{ className: 'twemoji' }} tag="div" className="mb-1 sm:mb-2 flex items-center justify-center gap-x-1 [&>img]:w-8 [&>img]:h-8 sm:[&>img]:w-8 sm:[&>img]:h-8">
@@ -158,20 +160,20 @@ export function CreateStoryScreen() {
        {/* --- Buttons Row --- */}
        {!isLoadingTopics && (
          <div className="flex justify-center items-start gap-4 mb-4 w-full max-w-lg"> {/* New Flex container */} 
-             {/* Refresh Button - Now uses fetchTopics from context */}
+             {/* Refresh Button - Updated style */}
              <button
                  onClick={fetchTopics} 
                  disabled={isLoadingTopics} 
-                 className="px-4 py-2 bg-blue-500 text-white rounded shadow hover:bg-blue-600 disabled:opacity-50 flex-1"
+                 className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-500 text-white text-sm sm:text-base font-semibold rounded-lg shadow hover:bg-blue-600 disabled:opacity-50 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
              >
                  {isLoadingTopics ? 'Loading...' : 'Refresh Topics'}
              </button>
  
-             {/* Create Story Button */}
+             {/* Create Story Button - Updated style */}
              <button
                  onClick={handleCreateStory}
                  disabled={!selectedTopic || isCreatingStory || !userId}
-                 className="px-6 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex-1"
+                 className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
              >
                  {isCreatingStory ? 'Creating...' : 'Create Story'}
              </button>
@@ -192,11 +194,12 @@ export function CreateStoryScreen() {
 
       {/* TODO: Add story length selection */} 
 
+      {/* Back Button - Updated style and label */}
       <button 
-        className="absolute top-4 left-4 px-4 py-2 bg-gray-300 rounded shadow hover:bg-gray-400 text-sm"
-        onClick={() => navigate('/home')} // Go back home
+        className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+        onClick={() => navigate(-1)} // Go back
       >
-        Back to Home
+        Back
       </button>
     </div>
   )

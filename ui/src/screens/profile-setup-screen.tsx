@@ -22,7 +22,7 @@ export function ProfileSetupScreen() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-yellow-100 overflow-hidden p-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-blue-100 overflow-y-auto p-4">
        {setupStep === 'profile' && (
          <ProfileForm 
             currentUser={currentUser}

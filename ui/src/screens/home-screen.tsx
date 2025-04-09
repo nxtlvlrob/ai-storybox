@@ -28,14 +28,14 @@ export function HomeScreen() {
   }
 
   return (
-    // Added relative positioning for the absolute settings button
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 text-white p-4">
+    // Changed background and text color
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-blue-100 text-gray-800 p-4">
       
-      {/* Settings Text Button - Top Right Corner */}
+      {/* Settings Text Button - Top Right Corner - Adjusted colors */}
       <button 
         onClick={handleGoToSettings}
-        // Adjusted padding for text
-        className="absolute top-4 right-4 px-3 py-1.5 rounded-lg text-sm text-white bg-black bg-opacity-20 hover:bg-opacity-40 transition duration-300 ease-in-out"
+        // Adjusted padding and colors for new background
+        className="absolute top-4 right-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition duration-300 ease-in-out"
         aria-label="Settings"
       >
         Settings {/* Changed from icon to text */}
@@ -52,26 +52,26 @@ export function HomeScreen() {
         )}
       </div>
 
-      {/* Welcome Text - Reduced bottom margin */}
-      <h1 className="text-3xl sm:text-4xl font-bold mb-4 sm:mb-6 drop-shadow-lg text-center">Welcome, {displayName}!</h1>
+      {/* Welcome Text - Adjusted color */}
+      <h1 className="text-3xl sm:text-4xl font-bold mb-4 sm:mb-6 text-gray-800 drop-shadow-sm text-center">Welcome, {displayName}!</h1>
       {/* Removed the longer paragraph to save space */} 
       {/* <p className="text-lg sm:text-xl mb-10 sm:mb-12 text-center max-w-md drop-shadow-md">
         Create magical, personalized stories for your little ones with the power of AI.
       </p> */}
       
-      {/* Main Action Buttons - In a Row */}
-      <div className="flex flex-row items-center space-x-4 sm:space-x-6 mt-4"> {/* Changed to flex-row, added space-x, added mt-4 */} 
+      {/* Main Action Buttons - In a Row - Adjusted styles */}
+      <div className="flex flex-row items-center space-x-4 sm:space-x-6 mt-4">
         <button 
           onClick={handleStartStory} 
-          // Adjusted padding/text size slightly
-          className="w-auto px-5 py-2.5 sm:px-6 sm:py-3 bg-white border-2 border-white text-purple-600 font-semibold rounded-lg shadow-lg hover:bg-gray-100 transition duration-300 ease-in-out text-sm sm:text-base transform hover:scale-105"
+          // Updated styles for new background
+          className="w-auto px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 border-2 border-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition duration-300 ease-in-out text-sm sm:text-base transform hover:scale-105"
         >
           ✨ New Story
         </button>
         <button 
           onClick={handleViewMyStories} 
-           // Adjusted padding/text size slightly
-          className="w-auto px-5 py-2.5 sm:px-6 sm:py-3 bg-transparent border-2 border-white text-white font-semibold rounded-lg shadow-lg hover:bg-white hover:bg-opacity-20 transition duration-300 ease-in-out text-sm sm:text-base transform hover:scale-105"
+           // Updated styles for new background
+          className="w-auto px-5 py-2.5 sm:px-6 sm:py-3 bg-transparent border-2 border-blue-500 text-blue-700 font-semibold rounded-lg shadow-md hover:bg-blue-500 hover:text-white transition duration-300 ease-in-out text-sm sm:text-base transform hover:scale-105"
         >
           📚 My Stories
         </button>
@@ -79,8 +79,8 @@ export function HomeScreen() {
       </div>
 
       {/* Debug info - kept at bottom */} 
-      {isLoadingTopics && <div className="absolute bottom-2 left-2 text-xs text-yellow-200 opacity-75">Fetching topics...</div>}
-      {topicsError && <div className="absolute bottom-2 left-2 text-xs text-red-200 opacity-75">Error: {topicsError}</div>}
+      {isLoadingTopics && <div className="absolute bottom-2 left-2 text-xs text-blue-500 opacity-75">Fetching topics...</div>}
+      {topicsError && <div className="absolute bottom-2 left-2 text-xs text-red-500 opacity-75">Error: {topicsError}</div>}
     </div>
   )
 } 

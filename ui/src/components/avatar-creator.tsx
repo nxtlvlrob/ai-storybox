@@ -215,9 +215,16 @@ export function AvatarCreator({
     return (
       <div className="flex items-center justify-between w-full max-w-xs px-3">
         {/* Adjusted button styles for better fit/consistency */}
-        <button onClick={() => changeOption(optionKey, 'prev')} className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-purple-300 rounded-lg text-purple-800 text-xl shadow hover:bg-purple-400 flex-shrink-0">◀</button>
-        <span className="w-20 md:w-24 text-base md:text-lg font-medium text-purple-700 text-center mx-2 whitespace-nowrap">{label}</span>
-        <button onClick={() => changeOption(optionKey, 'next')} className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-purple-300 rounded-lg text-purple-800 text-xl shadow hover:bg-purple-400 flex-shrink-0">▶</button>
+        <button 
+            onClick={() => changeOption(optionKey, 'prev')} 
+            className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-blue-200 rounded-lg text-blue-800 text-xl shadow hover:bg-blue-300 flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >◀</button>
+        {/* Updated text color */}
+        <span className="w-20 md:w-24 text-base md:text-lg font-medium text-blue-800 text-center mx-2 whitespace-nowrap">{label}</span>
+        <button 
+            onClick={() => changeOption(optionKey, 'next')} 
+            className="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center bg-blue-200 rounded-lg text-blue-800 text-xl shadow hover:bg-blue-300 flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >▶</button>
       </div>
     );
   }
@@ -227,7 +234,8 @@ export function AvatarCreator({
   return (
     // Main container adjusted slightly for component usage
     <div className="flex flex-col items-center w-full max-w-3xl mx-auto">
-      <h1 className="text-xl md:text-2xl font-bold text-purple-800 text-center mb-4 md:mb-6">
+      {/* Updated title color */}
+      <h1 className="text-xl md:text-2xl font-bold text-blue-800 text-center mb-4 md:mb-6">
         {mode === 'setup' ? 'Create Your Avatar' : 'Edit Your Avatar'}
       </h1>
 
@@ -239,8 +247,8 @@ export function AvatarCreator({
           <OptionControl label="Skin Tone" optionKey="skinColorIndex" />
         </div>
 
-        {/* Avatar Preview */}
-        <div className="w-40 h-40 md:w-48 md:h-48 mx-auto md:mx-4 my-4 md:my-0 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-purple-300 flex-shrink-0 order-first md:order-none">
+        {/* Avatar Preview - Updated border */}
+        <div className="w-40 h-40 md:w-48 md:h-48 mx-auto md:mx-4 my-4 md:my-0 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-blue-300 flex-shrink-0 order-first md:order-none">
           {avatarSvg ? (
             <div dangerouslySetInnerHTML={{ __html: avatarSvg }} className="w-full h-full scale-110 flex items-center justify-center" />
           ) : (
@@ -256,26 +264,29 @@ export function AvatarCreator({
         </div>
       </div>
 
-      {saveError && (
-         <p className="text-sm text-red-600 text-center mt-2 mb-2">{saveError}</p>
-      )}
+      {/* Bottom Controls - Randomize and Save */}
+      <div className="flex flex-col items-center mt-4 md:mt-6 w-full max-w-xs">
+        {/* Updated Randomize button style */}
+        <button 
+          onClick={randomizeAllOptions}
+          className="mb-3 px-4 py-2 w-full bg-gray-200 text-gray-700 rounded-lg shadow hover:bg-gray-300 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-gray-400"
+        >
+          🎲 Randomize
+        </button>
 
-      {/* Action Buttons */}
-      <div className="flex items-center space-x-6 md:space-x-8 mt-2">
-          <button
-            className="px-6 py-2 md:px-8 md:py-3 bg-yellow-400 text-yellow-800 font-semibold rounded-xl shadow-md hover:bg-yellow-500 text-base md:text-xl disabled:opacity-50"
-            onClick={randomizeAllOptions}
-            disabled={isSaving}
-          >
-              Randomize
-          </button>
-          <button
-            className="px-8 py-2 md:px-10 md:py-3 bg-orange-500 text-white font-semibold rounded-xl shadow-md hover:bg-orange-600 text-base md:text-xl disabled:opacity-50"
-            onClick={handleSave} // Use the unified save handler
-            disabled={isSaving || !avatarSvg} // Disable if saving or preview failed
-          >
-            {isSaving ? 'Saving...' : saveButtonText}
-          </button>
+        {/* Display Save Error */}
+        {saveError && (
+          <p className="text-sm text-red-600 text-center mb-2">{saveError}</p>
+        )}
+
+        {/* Updated Save button style */}
+        <button
+          className="w-full px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-100 disabled:opacity-50"
+          onClick={handleSave}
+          disabled={isSaving}
+        >
+          {isSaving ? 'Saving...' : saveButtonText}
+        </button>
       </div>
     </div>
   )

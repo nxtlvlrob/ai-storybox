@@ -143,7 +143,7 @@ export function ProfileForm({
       {/* Form Area */}
       <div className="w-full max-w-md flex-grow flex flex-col justify-center pt-2 pb-1">
         {mode === 'setup' && (
-           <h1 className="text-2xl md:text-3xl font-bold mb-4 text-yellow-800 text-center">
+           <h1 className="text-2xl md:text-3xl font-bold mb-4 text-blue-800 text-center">
              Tell Us About You!
            </h1>
         )}
@@ -185,19 +185,19 @@ export function ProfileForm({
             <div className="flex space-x-2">
               <button
                 onClick={() => handleGenderSelect('boy')}
-                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === 'boy' ? 'bg-blue-500 text-white border-blue-600' : 'bg-white text-blue-500 border-blue-300 hover:bg-blue-50'}`}
+                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 ${profileData.gender === 'boy' ? 'bg-blue-500 text-white border-blue-600 focus:ring-blue-400' : 'bg-white text-blue-500 border-blue-300 hover:bg-blue-50 focus:ring-blue-300'}`}
               >
                 Boy
               </button>
               <button
                 onClick={() => handleGenderSelect('girl')}
-                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === 'girl' ? 'bg-pink-500 text-white border-pink-600' : 'bg-white text-pink-500 border-pink-300 hover:bg-pink-50'}`}
+                className={`flex-1 py-2 px-3 rounded-lg text-base font-semibold border-2 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 ${profileData.gender === 'girl' ? 'bg-pink-500 text-white border-pink-600 focus:ring-pink-400' : 'bg-white text-pink-500 border-pink-300 hover:bg-pink-50 focus:ring-pink-300'}`}
               >
                 Girl
               </button>
               <button
                 onClick={handleSkipGender}
-                className={`py-2 px-3 rounded-lg text-base font-semibold border-2 ${profileData.gender === undefined ? 'bg-gray-500 text-white border-gray-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100'}`}
+                className={`py-2 px-3 rounded-lg text-base font-semibold border-2 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 ${profileData.gender === undefined ? 'bg-gray-500 text-white border-gray-600 focus:ring-gray-400' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-100 focus:ring-gray-300'}`}
               >
                 Skip
               </button>
@@ -212,7 +212,7 @@ export function ProfileForm({
 
         {/* Save Button */}
          <button
-          className="mt-5 mb-2 self-center px-6 py-2 bg-blue-500 text-white text-lg font-semibold rounded-lg shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-yellow-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="mt-5 mb-2 self-center px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleSave} // Changed from handleNextClick
           disabled={isSaving}
         >

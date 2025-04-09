@@ -40,12 +40,12 @@ export function ConfirmationScreen() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-red-100 p-4">
-      <h1 className="text-3xl font-bold mb-4">Profile Ready!</h1>
+    <div className="flex flex-col items-center justify-center h-screen bg-blue-100 p-4">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4">Profile Ready!</h1>
       <p className="mb-6 text-lg">Everything looks great.</p>
       
       {/* Avatar Display */}
-      <div className="w-48 h-48 mb-6 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-red-300">
+      <div className="w-48 h-48 mb-6 bg-white rounded-full shadow-lg overflow-hidden flex items-center justify-center border-4 border-blue-300">
         {profileLoading ? (
             <span className="text-gray-400 text-sm">Loading...</span>
         ) : avatarUrl ? (
@@ -64,7 +64,7 @@ export function ConfirmationScreen() {
       )}
 
       <button 
-        className="px-8 py-4 bg-teal-500 text-white text-xl font-semibold rounded-lg shadow hover:bg-teal-600 disabled:opacity-50"
+        className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         onClick={handleStartExploring}
         disabled={isSaving || profileLoading}
       >
