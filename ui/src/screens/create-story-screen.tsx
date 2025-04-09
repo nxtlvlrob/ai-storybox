@@ -108,21 +108,33 @@ export function CreateStoryScreen() {
 
 
   return (
+    // Reverted background, removed header, re-added absolute button and title
     <div className="flex flex-col items-center justify-center min-h-screen bg-blue-100 p-4 max-h-screen overflow-hidden relative">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gray-800">Choose Your Story Topic</h1>
+      {/* Re-added absolute Back Button */}
+      <button 
+        className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+        onClick={() => navigate(-1)} // Go back
+      >
+        Back
+      </button>
+
+      {/* Reverted title */}
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-blue-800">Choose a Story Idea!</h1>
+      
       {/* TODO: Add theme/preference selection */}
 
-      {/* Loading State */}
+      {/* Reverted loading text */}
       {isLoadingTopics && (
-        <div className="animate-pulse text-gray-600">Loading topics...</div>
+        <div className="animate-pulse text-gray-600">Looking for Story Ideas...</div>
       )}
 
-      {/* Error State (Topics) */}
+      {/* Reverted error message */}
       {topicsError && (
         <div className="text-red-600 bg-red-100 p-3 rounded mb-4">
-          {topicsError} 
+          Oh dear, the story ideas got lost! 
+          {/* Reverted Retry button text */}
           <button onClick={fetchTopics} className="ml-2 px-3 py-1.5 bg-red-500 text-white rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1">
-              Retry
+              Try Again
           </button>
         </div>
       )}
@@ -152,55 +164,44 @@ export function CreateStoryScreen() {
         </div>
       )}
       
-      {/* No Topics Message */}
+      {/* Reverted No Topics Message */}
        {!isLoadingTopics && !topicsError && topics.length === 0 && (
-           <p className="text-gray-600 mb-4">No topics available. Try refreshing.</p>
+           <p className="text-gray-600 mb-4">No ideas here yet. Try getting more?</p>
        )}
 
        {/* --- Buttons Row --- */}
        {!isLoadingTopics && (
-         <div className="flex justify-center items-start gap-4 mb-4 w-full max-w-lg"> {/* New Flex container */} 
-             {/* Refresh Button - Updated style */}
-             <button
+         <div className="flex justify-center items-start gap-4 mb-4 w-full max-w-lg"> 
+              {/* Refresh Button - Reverted text */}
+              <button
                  onClick={fetchTopics} 
                  disabled={isLoadingTopics} 
                  className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-500 text-white text-sm sm:text-base font-semibold rounded-lg shadow hover:bg-blue-600 disabled:opacity-50 flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
-             >
-                 {isLoadingTopics ? 'Loading...' : 'Refresh Topics'}
-             </button>
- 
-             {/* Create Story Button - Updated style */}
-             <button
-                 onClick={handleCreateStory}
-                 disabled={!selectedTopic || isCreatingStory || !userId}
-                 className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-             >
-                 {isCreatingStory ? 'Creating...' : 'Create Story'}
-             </button>
+              >
+                 {isLoadingTopics ? 'Searching...' : 'Get New Ideas!'}
+              </button>
+  
+              {/* Create Story Button - Reverted text */}
+              <button
+                  onClick={handleCreateStory}
+                  disabled={!selectedTopic || isCreatingStory || !userId}
+                  className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                 {isCreatingStory ? 'Creating...' : 'Start Story!'}
+              </button>
          </div>
        )}
 
        {/* --- Creation Feedback Area --- */}
-       <div className="mt-2 w-full max-w-md flex flex-col items-center h-10"> {/* Container for error/prompt, added fixed height */} 
-          {/* Error State (Creation) */}
+       <div className="mt-2 w-full max-w-md flex flex-col items-center h-10"> 
+          {/* Reverted Creation Error */}
            {createError && (
-             <div className="text-red-600 bg-red-100 p-3 rounded mb-4 w-full text-center">{createError}</div>
+             <div className="text-red-600 bg-red-100 p-3 rounded mb-4 w-full text-center">Oops! Something went wrong creating the story.</div>
            )}
            {!userId && !isLoadingTopics && (
-                <p className="text-sm text-red-600">Please log in to create a story.</p> // Removed margin top
+                <p className="text-sm text-red-600">Please log in to create a story.</p>
             )}
        </div>
-
-
-      {/* TODO: Add story length selection */} 
-
-      {/* Back Button - Updated style and label */}
-      <button 
-        className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500"
-        onClick={() => navigate(-1)} // Go back
-      >
-        Back
-      </button>
     </div>
   )
 } 

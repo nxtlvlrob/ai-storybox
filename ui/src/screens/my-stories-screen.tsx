@@ -181,24 +181,44 @@ export function MyStoriesScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 pb-12 relative">
-      {/* Back Button */}
-      <button 
-        className="absolute top-4 left-4 px-3 py-1.5 rounded-lg text-sm text-blue-700 bg-white bg-opacity-70 hover:bg-opacity-100 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-500 z-10"
-        onClick={() => navigate(-1)} // Go back
-      >
-        Back
-      </button>
+    <div className="min-h-screen bg-blue-100 pb-12">
+      {/* Header using flex-1 for centering - Transparent Background */}
+      <header className="sticky top-0 px-4 py-3 flex justify-between items-center z-10 w-full">
+        {/* Left Slot (Back Button) */}
+        <div className="flex-1 text-left">
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm text-blue-700 hover:text-blue-900 transition focus:outline-none focus:ring-2 focus:ring-blue-500 inline-block"
+            onClick={() => navigate('/home')}
+          >
+            Back
+          </button>
+        </div>
 
-      {/* Main content - Two column story grid */}
+        {/* Center Slot (Title) */}
+        <div className="flex-1 text-center">
+          <h1 className="text-xl font-bold text-blue-900 inline-block">My Stories</h1>
+        </div>
+
+        {/* Right Slot (New Story Button) */}
+        <div className="flex-1 text-right">
+          <button 
+            className="px-3 py-1.5 rounded-lg text-sm text-blue-700 hover:text-blue-900 transition focus:outline-none focus:ring-2 focus:ring-blue-500 inline-block"
+            onClick={handleCreateStory}
+          >
+            + New Story
+          </button>
+        </div>
+      </header>
+
+      {/* Main content - Adjusted top padding if needed */}
       <main className="container mx-auto px-4 py-6 max-w-4xl">
         {stories.length === 0 ? (
           <div className="bg-white rounded-lg shadow-lg p-8 text-center">
             <div className="w-20 h-20 mx-auto mb-4 text-4xl flex items-center justify-center">
-              📚
+              📖
             </div>
-            <h2 className="text-xl font-semibold text-blue-900 mb-2">No Stories Yet</h2>
-            <p className="text-gray-600 mb-6">Start creating your first magical story!</p>
+            <h2 className="text-xl font-semibold text-blue-900 mb-2">No Stories Yet!</h2>
+            <p className="text-gray-600 mb-6">Ready to create your first story?</p>
             <button
               onClick={handleCreateStory}
               className="px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow hover:bg-blue-700 transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"

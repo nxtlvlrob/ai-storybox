@@ -8,23 +8,23 @@ import type { StoryDocument, StoryStatus } from '../../../types';
 
 // Helper to format status messages
 function formatStatus(status: StoryStatus): string {
-  if (status === 'queued') return 'Waiting to start...';
-  if (status === 'planning') return 'Planning the story...';
+  if (status === 'queued') return 'Ready to start...';
+  if (status === 'planning') return 'Thinking up the story...';
   if (status === 'complete') return 'Story Complete!';
-  if (status === 'error') return 'An error occurred.';
+  if (status === 'error') return 'Oh no, an error occurred!';
   if (status.startsWith('generating_text_')) {
     const index = status.split('_')[2];
-    return `Writing section ${parseInt(index, 10) + 1}...`;
+    return `Writing part ${parseInt(index, 10) + 1}...`;
   }
   if (status.startsWith('generating_image_')) {
     const index = status.split('_')[2];
-    return `Creating illustration for section ${parseInt(index, 10) + 1}...`;
+    return `Making picture for part ${parseInt(index, 10) + 1}...`;
   }
   if (status.startsWith('generating_audio_')) {
     const index = status.split('_')[2];
-    return `Recording audio for section ${parseInt(index, 10) + 1}...`;
+    return `Recording sound for part ${parseInt(index, 10) + 1}...`;
   }
-  return 'Processing...'; // Fallback
+  return 'Working on it...'; // Fallback
 }
 
 export function StoryViewerScreen() {
@@ -43,6 +43,8 @@ export function StoryViewerScreen() {
   const [hasStartedPlayback, setHasStartedPlayback] = useState<boolean>(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(true);
   const [isTextVisible, setIsTextVisible] = useState<boolean>(false);
+  const [showPlaybackIndicator, setShowPlaybackIndicator] = useState<'play' | 'pause' | null>(null);
+  const playbackIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refs for audio control and tracking
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -52,6 +54,57 @@ export function StoryViewerScreen() {
   
   // Track Firestore updates to prevent audio restarts
   const lastStoryUpdate = useRef<number>(Date.now());
+
+  // --- Playback Indicator Logic ---
+  const triggerPlaybackIndicator = useCallback((type: 'play' | 'pause') => {
+    if (playbackIndicatorTimeoutRef.current) {
+      clearTimeout(playbackIndicatorTimeoutRef.current);
+    }
+    setShowPlaybackIndicator(type);
+    playbackIndicatorTimeoutRef.current = setTimeout(() => {
+      setShowPlaybackIndicator(null);
+    }, 1000); // Show indicator for 1 second
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (playbackIndicatorTimeoutRef.current) {
+        clearTimeout(playbackIndicatorTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Moved playAudio definition up
+  const playAudio = useCallback((audioUrl: string, sectionId: string) => {
+    if (currentPlayingSection.current === sectionId && audioRef.current) return;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (audioUrl) {
+      const newAudio = new Audio(audioUrl);
+      audioRef.current = newAudio;
+      currentPlayingSection.current = sectionId;
+      setCurrentAudio(newAudio);
+      newAudio.addEventListener('play', () => {
+        loadedSections.current.add(sectionId);
+        triggerPlaybackIndicator('play');
+      });
+      newAudio.play().catch(e => {
+        console.error("Error playing audio:", e);
+        currentPlayingSection.current = null;
+      });
+      newAudio.onended = () => {
+        setCurrentAudio(null);
+        audioRef.current = null;
+        currentPlayingSection.current = null;
+        if (story && Array.isArray(story.sections) && currentSectionIndex < story.sections.length - 1 && isAutoPlaying) {
+          setCurrentSectionIndex(prev => prev + 1);
+        }
+      };
+    }
+  }, [story, currentSectionIndex, isAutoPlaying, triggerPlaybackIndicator]);
 
   useEffect(() => {
     if (!storyId) {
@@ -138,76 +191,16 @@ export function StoryViewerScreen() {
     };
   }, [storyId, firestore, auth, navigate, hasStartedPlayback]);
 
-  // Auto-play the section once it's ready - with Firestore update protection
+  // Auto-play useEffect - now defined after playAudio
   useEffect(() => {
-    if (!story || !Array.isArray(story.sections) || 
-        currentSectionIndex >= story.sections.length || 
-        !isAutoPlaying) {
-      return;
-    }
-    
+    if (!story || !Array.isArray(story.sections) || currentSectionIndex >= story.sections.length || !isAutoPlaying) return;
     const section = story.sections[currentSectionIndex];
-    if (!section || !section.audioUrl) {
-      return;
-    }
-    
+    if (!section || !section.audioUrl) return;
     const currentSectionId = `${storyId}_${currentSectionIndex}`;
-    
-    // If this is a new section that we haven't started playing yet, or 
-    // if no section is currently playing, start playback
     if (currentSectionId !== currentPlayingSection.current) {
       playAudio(section.audioUrl, currentSectionId);
     }
-    // Otherwise, if this is the same section already playing, don't restart
-    
-  }, [story, currentSectionIndex, isAutoPlaying, storyId]);
-
-  // Function to play audio with auto-advance to next section
-  const playAudio = useCallback((audioUrl: string, sectionId: string) => {
-    // Don't restart the same audio if it's already playing
-    if (currentPlayingSection.current === sectionId && audioRef.current) {
-      return;
-    }
-    
-    // Stop currently playing audio if any
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    
-    if (audioUrl) {
-      const newAudio = new Audio(audioUrl);
-      audioRef.current = newAudio;
-      currentPlayingSection.current = sectionId;
-      setCurrentAudio(newAudio);
-      
-      // Set up playback tracking
-      newAudio.addEventListener('play', () => {
-        // Mark this section as loaded for future reference
-        loadedSections.current.add(sectionId);
-      });
-      
-      newAudio.play().catch(e => {
-        console.error("Error playing audio:", e);
-        currentPlayingSection.current = null;
-      });
-      
-      // Set up auto-advance when audio ends
-      newAudio.onended = () => {
-        setCurrentAudio(null);
-        audioRef.current = null;
-        currentPlayingSection.current = null;
-        
-        // Advance to next section if available and auto-play is on
-        if (story && 
-            Array.isArray(story.sections) && 
-            currentSectionIndex < story.sections.length - 1 && 
-            isAutoPlaying) {
-          setCurrentSectionIndex(prev => prev + 1);
-        }
-      };
-    }
-  }, [story, currentSectionIndex, isAutoPlaying]);
+  }, [story, currentSectionIndex, isAutoPlaying, storyId, playAudio]);
 
   // Navigate to previous section if available
   const goToPrevSection = useCallback(() => {
@@ -311,10 +304,10 @@ export function StoryViewerScreen() {
         <div className="w-24 h-24 relative">
           <div className="absolute w-full h-full rounded-full border-4 border-t-blue-500 border-r-blue-300 border-b-blue-300 border-l-transparent animate-spin"></div>
           <div className="absolute w-full h-full flex items-center justify-center">
-            <span className="text-3xl">📚</span>
+            <span className="text-3xl">📖</span>
           </div>
         </div>
-        <p className="mt-4 text-gray-700 font-medium animate-pulse">Loading your magical story...</p>
+        <p className="mt-4 text-gray-700 font-medium animate-pulse">Loading your story...</p>
       </div>
     );
   }
@@ -361,7 +354,7 @@ export function StoryViewerScreen() {
             </div>
           </div>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-blue-800">{story.title || 'Creating Your Story...'}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-blue-800">{story.title || 'Getting Your Story Ready...'}</h1>
         <p className="text-lg text-center text-blue-700 animate-pulse">{formatStatus(story.status)}</p>
         <div className="mt-6 w-64 h-4 bg-gray-300 rounded-full overflow-hidden">
           <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 animate-progress"></div>
@@ -387,26 +380,16 @@ export function StoryViewerScreen() {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Loading State */}
-      {isLoading && (
-        <div className="fixed inset-0 flex flex-col justify-center items-center bg-gray-100">
-          <div className="relative w-64 h-64 mb-6">
-            <div className="absolute top-0 left-0 w-full h-full">
-              <div className="w-full h-full bg-white rounded-lg shadow-lg overflow-hidden relative transform transition-all">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-100 to-blue-200 animate-pulse"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 border-4 border-white rounded-full border-t-transparent animate-spin"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-blue-800">{story.title || 'Creating Your Story...'}</h1>
-          <p className="text-lg text-center text-blue-700 animate-pulse">{formatStatus(story.status)}</p>
-          <div className="mt-6 w-64 h-4 bg-gray-300 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600 animate-progress"></div>
-          </div>
-        </div>
-      )}
+      {/* Exit Button */} 
+      <button 
+        onClick={() => navigate('/my-stories')} 
+        className="absolute top-4 right-4 z-40 p-2 bg-black/40 rounded-full text-white hover:bg-black/60 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800"
+        aria-label="Close Story"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
 
       {/* Story Player View */}
       {currentSection ? (
@@ -417,19 +400,19 @@ export function StoryViewerScreen() {
               <img 
                 src={currentSection.imageUrl} 
                 alt={`Illustration for section ${currentSectionIndex + 1}`} 
-                className="w-full h-full object-contain cursor-pointer"
+                className="w-full h-full object-cover cursor-pointer"
                 onClick={() => {
                   if (currentSection.audioUrl) {
                     if (currentAudio) {
-                      // Pause audio if playing
                       audioRef.current?.pause();
                       setCurrentAudio(null);
                       audioRef.current = null;
                       setIsAutoPlaying(false);
+                      triggerPlaybackIndicator('pause'); // Trigger pause indicator
                     } else {
-                      // Play audio if paused
                       playAudio(currentSection.audioUrl, `${storyId}_${currentSectionIndex}`);
                       setIsAutoPlaying(true);
+                      // Play indicator triggered within playAudio
                     }
                   }
                 }}
@@ -438,10 +421,7 @@ export function StoryViewerScreen() {
               <div className="h-full flex items-center justify-center">
                 <div className="bg-white/50 backdrop-blur-sm rounded-lg p-6 shadow-lg">
                   <div className="w-16 h-16 mx-auto border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                  <p className="text-center text-blue-700">
-                    {story.status.startsWith(`generating_image_${currentSectionIndex}`) ? 
-                      'Creating illustration...' : 'Loading illustration...'}
-                  </p>
+                  <p className="text-center text-blue-700">{story.status.startsWith(`generating_image_${currentSectionIndex}`) ? 'Drawing picture...' : 'Loading picture...'}</p>
                 </div>
               </div>
             )}
@@ -468,22 +448,6 @@ export function StoryViewerScreen() {
             {!currentSection.audioUrl && (
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white/80 p-6 rounded-full shadow-xl">
                 <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin"></div>
-              </div>
-            )}
-            
-            {/* Audio indicator overlay - Updated colors */}
-            {currentSection.audioUrl && (
-              <div className="absolute bottom-16 right-4 bg-white/80 p-2 rounded-full shadow-md">
-                {currentAudio ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
               </div>
             )}
             
@@ -520,11 +484,11 @@ export function StoryViewerScreen() {
             <div className="text-center p-6 bg-white rounded-xl shadow-lg max-w-sm">
               <div className="w-16 h-16 mx-auto border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
               <p className="text-lg text-blue-700 font-medium">{formatStatus(story.status)}</p>
-              <p className="text-sm text-blue-500 mt-2">Please wait while we prepare your story...</p>
+              <p className="text-sm text-blue-500 mt-2">Please wait while the story finishes...</p>
             </div>
           ) : isEmptySections ? (
             <div className="text-center p-6 bg-white rounded-xl shadow-lg max-w-sm">
-              <p className="text-lg text-gray-600 mb-4">This story doesn't have any content yet.</p>
+              <p className="text-lg text-gray-600 mb-4">This story doesn\'t have any pages yet!</p>
               <button
                 onClick={() => navigate('/my-stories')}
                 className="mt-4 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-gray-400"
@@ -537,6 +501,22 @@ export function StoryViewerScreen() {
           )}
         </div>
       )}
+
+      {/* Play/Pause Indicator Overlay */}
+      <div className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-opacity duration-300 ${showPlaybackIndicator ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="bg-black/50 p-6 rounded-full">
+          {showPlaybackIndicator === 'play' && (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8.118v3.764a1 1 0 001.555.832l3.197-1.882a1 1 0 000-1.664l-3.197-1.882z" clipRule="evenodd" />
+            </svg>
+          )}
+          {showPlaybackIndicator === 'pause' && (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 100-2H8V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 001 1h1a1 1 0 100-2h-1V8a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+          )}
+        </div>
+      </div>
 
       {/* Text Overlay - Only visible when toggled */}
       {isTextVisible && currentSection && currentSection.text && (
@@ -573,8 +553,8 @@ export function StoryViewerScreen() {
           <div className="bg-white rounded-2xl p-8 max-w-md mx-4 shadow-2xl transform animate-pop-in">
             <div className="text-center mb-6">
               <span className="text-5xl mb-4 block">🎉</span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-blue-800 mb-2">Story Complete!</h2>
-              <p className="text-gray-600">You've finished "{story.title}"</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-blue-800 mb-2">The End!</h2>
+              <p className="text-gray-600">You finished reading "{story.title}"!</p>
             </div>
             
             <div className="space-y-4">
@@ -582,13 +562,13 @@ export function StoryViewerScreen() {
                 onClick={restartStory}
                 className="w-full px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 text-white text-sm sm:text-base font-semibold rounded-lg shadow-md hover:bg-blue-700 transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                Play Again
+                Read Again
               </button>
               <button
                 onClick={createNewStory}
                 className="w-full px-5 py-2.5 sm:px-6 sm:py-3 bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-400"
               >
-                Create New Story
+                Start a New Story
               </button>
             </div>
           </div>
