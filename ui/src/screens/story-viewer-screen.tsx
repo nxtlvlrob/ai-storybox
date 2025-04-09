@@ -56,7 +56,10 @@ export function StoryViewerScreen() {
   const lastStoryUpdate = useRef<number>(Date.now());
 
   // --- Playback Indicator Logic ---
-  const triggerPlaybackIndicator = useCallback((type: 'play' | 'pause') => {
+  const triggerPlaybackIndicator = useCallback((type: 'play' | 'pause', isManualAction?: boolean) => {
+    // Only show indicator for manual actions
+    if (!isManualAction) return;
+
     if (playbackIndicatorTimeoutRef.current) {
       clearTimeout(playbackIndicatorTimeoutRef.current);
     }
@@ -89,7 +92,6 @@ export function StoryViewerScreen() {
       setCurrentAudio(newAudio);
       newAudio.addEventListener('play', () => {
         loadedSections.current.add(sectionId);
-        triggerPlaybackIndicator('play');
       });
       newAudio.play().catch(e => {
         console.error("Error playing audio:", e);
@@ -104,7 +106,7 @@ export function StoryViewerScreen() {
         }
       };
     }
-  }, [story, currentSectionIndex, isAutoPlaying, triggerPlaybackIndicator]);
+  }, [story, currentSectionIndex, isAutoPlaying]);
 
   useEffect(() => {
     if (!storyId) {
@@ -408,11 +410,11 @@ export function StoryViewerScreen() {
                       setCurrentAudio(null);
                       audioRef.current = null;
                       setIsAutoPlaying(false);
-                      triggerPlaybackIndicator('pause'); // Trigger pause indicator
+                      triggerPlaybackIndicator('pause', true); // Manual pause
                     } else {
                       playAudio(currentSection.audioUrl, `${storyId}_${currentSectionIndex}`);
                       setIsAutoPlaying(true);
-                      // Play indicator triggered within playAudio
+                      triggerPlaybackIndicator('play', true); // Manual play
                     }
                   }
                 }}

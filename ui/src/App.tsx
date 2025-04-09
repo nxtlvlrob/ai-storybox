@@ -33,8 +33,20 @@ function App() {
   if (combinedError) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-red-100 p-4">
-        <p className="text-xl text-red-700 font-semibold mb-4">Error Initializing Storybox</p>
-        <p className="text-red-600 text-center">{combinedError.message}</p>
+        <p className="text-xl text-red-700 font-semibold mb-2">Error Initializing Storybox</p>
+        <p className="text-red-600 text-center mb-6">
+          {/* Provide a more user-friendly message for offline errors */}
+          {combinedError.message.includes('offline') 
+            ? "Please check your internet connection and try again."
+            : combinedError.message}
+        </p>
+        {/* Add Retry Button */}
+        <button
+          onClick={() => window.location.reload()}
+          className="px-5 py-2 bg-red-500 text-white text-base font-medium rounded-lg shadow hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-red-100"
+        >
+          Retry
+        </button>
       </div>
     );
   }
