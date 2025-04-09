@@ -6,7 +6,6 @@ import { useProfile } from './context/profile-context'
 import { LoginScreen } from './screens/login-screen'
 import { WelcomeScreen } from './screens/welcome-screen'
 import { ProfileSetupScreen } from './screens/profile-setup-screen'
-import { AvatarCreationScreen } from './screens/avatar-creation-screen'
 import { ConfirmationScreen } from './screens/confirmation-screen'
 import { HomeScreen } from './screens/home-screen'
 import { CreateStoryScreen } from './screens/create-story-screen'
@@ -59,7 +58,6 @@ function App() {
           <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/setup-profile" element={<Navigate to="/home" replace />} />
-          <Route path="/setup-avatar" element={<Navigate to="/home" replace />} />
           <Route path="/setup-confirm" element={<Navigate to="/home" replace />} />
           <Route path="/login" element={<Navigate to="/home" replace />} />
         </>
@@ -67,7 +65,6 @@ function App() {
         <>
           <Route path="/" element={<WelcomeScreen />} />
           <Route path="/setup-profile" element={<ProfileSetupScreen />} />
-          <Route path="/setup-avatar" element={<AvatarCreationScreen />} />
           <Route path="/setup-confirm" element={<ConfirmationScreen />} />
           <Route path="/home" element={<Navigate to="/" replace />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
