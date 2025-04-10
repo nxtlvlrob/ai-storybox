@@ -92,7 +92,7 @@ export function MyStoriesScreen() {
 
   // Handle story card click to view a story
   function handleStoryClick(storyId: string) {
-    navigate(`/story/${storyId}`);
+    navigate(`/stories/${storyId}`);
   }
 
   // Handle create new story button click
