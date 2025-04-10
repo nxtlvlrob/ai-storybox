@@ -246,16 +246,27 @@ export const generateStoryPipeline = onDocumentCreated(
         audioUrl: null,
       })) : [];
       const firstStatus: StoryStatus = "generating_text_0"; // Start background generation
+      
+      // Determine voice to use for the whole story based on user profile
+      const validOpenAIVoices = ["ballad", "echo", "fable", "onyx", "nova", "shimmer"];
+      let storyVoiceId = userProfile?.voiceId;
+      if (!storyVoiceId || !validOpenAIVoices.includes(storyVoiceId)) {
+        logger.warn(`[${storyId}] User profile voiceId '${storyVoiceId}' is invalid or missing. Defaulting to 'ballad'.`);
+        storyVoiceId = "ballad"; // Default voice
+      }
+      logger.info(`[${storyId}] Selected voiceId for story: ${storyVoiceId}`);
+      
       const initialUpdateData: Partial<StoryDocumentWriteData> = {
         title,
         plan,
         sections: initialSectionsData,
         status: firstStatus,
+        voiceId: storyVoiceId, // <-- Save the determined voice ID
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         errorMessage: null, // Clear any previous error
       };
       await storyRef.update(initialUpdateData);
-      logger.info(`[${storyId}] Initial story structure saved. Status: '${firstStatus}'.`);
+      logger.info(`[${storyId}] Initial story structure saved. Status: '${firstStatus}'. Voice: ${storyVoiceId}`);
     } catch (error) {
       logger.error(`[${storyId}] Failed generating title/plan:`, error);
       await storyRef.update({
@@ -338,7 +349,7 @@ export const generateStoryPipeline = onDocumentCreated(
         // Determine mime type from data URI if possible, default to png
         const mimeMatch = currentSectionImageBase64.match(/^data:(image\/[^;]+);base64,/);
         const mimeType = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "image/png";
-        const fileExtension = mimeType === "image/jpeg" ? "jpg" : "png"; // Basic extension mapping
+        const fileExtension = mimeType === "image/jpeg" ? "jpg" : "png";
 
         // Define GCS path
         const imagePath = `stories/${storyId}/images/section_${index}.${fileExtension}`;
@@ -408,17 +419,17 @@ export const generateStoryPipeline = onDocumentCreated(
           const audioPath = `stories/${storyId}/audio/section_${index}.mp3`;
           logger.info(`[${storyId}] Generating audio with OpenAI for section ${index}...`);
           
-          // Use child voice based on story context
-          const voice = storyData.gender === "male" ? 
-            OPENAI_VOICES.MALE_CHILD : 
-            OPENAI_VOICES.FEMALE_CHILD;
+          // --- Use the voiceId stored in the StoryDocument --- 
+          // Read from storyData which should have been set in step 4
+          const voice = storyData.voiceId || "ballad"; // Default to ballad if somehow missing (Use double quotes)
+          logger.info(`[${storyId}] Using OpenAI voice: ${voice}`);
           
           generatedAudioUrl = await generateAndUploadOpenAIAudio(
             generatedText,
             audioPath,
             {
-              voice,
-              speed: 1.0
+              voice, // Pass the selected voice
+              speed: 0.25
             }
           );
           

@@ -46,13 +46,14 @@ export interface StoryDocument {
     characterIds: string[];           // Array of character IDs selected
     length: StoryLength;              // Desired story length 
     status: StoryStatus;              // Current generation state
-    errorMessage: string | null;      // Error message if status is 'error'
+    errorMessage?: string | null;      // Error message if status is 'error'
     plan: string[];                   // Generated story plan (array of scene descriptions)
     sections: StorySection[];         // Array containing generated content for each section
-    createdAt: Timestamp | Date;      // Firestore timestamp when the job was created (Date on client)
-    updatedAt?: Timestamp | Date;     // Firestore timestamp, updated by the Cloud Function (Date on client)
+    createdAt: Timestamp | FieldValue | Date;      // Firestore timestamp when the job was created (Date on client)
+    updatedAt: Timestamp | FieldValue | Date;     // Firestore timestamp, updated by the Cloud Function (Date on client)
     ttsProvider?: "google" | "elevenlabs" | "openai"; // The TTS provider to use for audio generation
     gender?: "male" | "female";       // Gender for voice selection in TTS
+    voiceId?: string; // Add voiceId used for generation
 }
 
 /**
@@ -151,6 +152,7 @@ export interface UserProfile {
         style: 'adventurer' | 'pixel-art';
         options: Record<string, string>;
     } | null;
+    voiceId?: string;
     createdAt: Timestamp | FieldValue;
     onboardingComplete: boolean;
     // Add other fields as needed

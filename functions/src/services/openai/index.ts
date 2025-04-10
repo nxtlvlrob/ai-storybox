@@ -78,7 +78,7 @@ export async function generateOpenAIAudio(
   // Get configuration options with defaults
   const model = config?.model || DEFAULT_TTS_MODEL;
   const voice = config?.voice || OPENAI_VOICES.FEMALE_YOUNG;
-  const speed = config?.speed ?? 1.0; // Default if not provided
+  const speed = config?.speed ?? 0.25; // Default if not provided
   
   try {
     logger.info(`Sending TTS request to OpenAI for text (${text.length} chars) with voice ${voice}`);
@@ -87,6 +87,7 @@ export async function generateOpenAIAudio(
     const response = await client.audio.speech.create({
       model,
       voice,
+      instructions: "Use a warm gentle voice",
       input: text,
       speed,
       response_format: "mp3",

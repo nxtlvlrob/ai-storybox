@@ -13,6 +13,7 @@ export interface UserProfile {
         style: 'adventurer' | 'pixel-art';
         options: Record<string, string>; // Store selected options for the style
     } | null;
+    voiceId?: string; // Add this line for selected voice
     createdAt: Timestamp | FieldValue; // Use specific Firestore types
     onboardingComplete: boolean;
     // Add other fields as needed (e.g., likes, dislikes)
