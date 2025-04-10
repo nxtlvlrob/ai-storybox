@@ -100,7 +100,12 @@ Style Guidelines:
 - Focus on the main action described in the scene.
 - **Output Aspect Ratio:** Aim for a widescreen 16:9 aspect ratio (approximately 800x460 pixels).
 
-IMPORTANT: Respond ONLY with the image. Keep the style friendly and appropriate for young children. Maintain visual consistency with the character reference and any previous image context. **Generate original designs, avoiding copyrighted styles/characters.**`;
+**Strict Constraints (Must Follow):**
+- **Single Character:** The image must contain ONLY ONE instance of the main character described. Do NOT show the character multiple times.
+- **No Text:** The image must NOT contain any letters, words, numbers, or text of any kind.
+- **Single Frame:** The output must be a single, unified landscape image. Do NOT create multiple panels, frames, or comic-book-style layouts.
+
+IMPORTANT: Respond ONLY with the image. Keep the style friendly and appropriate for young children. Maintain visual consistency with the character reference and any previous image context. **Generate original designs, avoiding copyrighted styles/characters.** **Strictly adhere to the constraints listed above.**`;
 }
 
 /**
