@@ -146,8 +146,11 @@ export interface UserProfile {
     name: string;
     birthday: Date | null;
     gender?: 'boy' | 'girl';
-    avatarSeed?: string;
     avatarUrl?: string;
+    avatarConfig?: {
+        style: 'adventurer' | 'pixel-art';
+        options: Record<string, string>;
+    } | null;
     createdAt: Timestamp | FieldValue;
     onboardingComplete: boolean;
     // Add other fields as needed

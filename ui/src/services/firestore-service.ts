@@ -8,9 +8,11 @@ export interface UserProfile {
     name: string;
     birthday: Date | null;
     gender?: 'boy' | 'girl';
-    avatarSeed?: string; // Store the seed used to generate the avatar
     avatarUrl?: string; // Add field for storage URL
-    // avatarOptions?: object; // Or store the full options object if preferred
+    avatarConfig?: { // Add this complex type
+        style: 'adventurer' | 'pixel-art';
+        options: Record<string, string>; // Store selected options for the style
+    } | null;
     createdAt: Timestamp | FieldValue; // Use specific Firestore types
     onboardingComplete: boolean;
     // Add other fields as needed (e.g., likes, dislikes)

@@ -93,7 +93,7 @@ export function SettingsScreen() {
           <div className="w-full max-w-3xl">
             <AvatarCreator
               userId={currentUser.uid}
-              currentAvatarSeed={userProfile?.avatarSeed}
+              currentAvatarConfig={userProfile?.avatarConfig}
               onSaveSuccess={handleAvatarSaveSuccess}
               mode="edit"
             />
