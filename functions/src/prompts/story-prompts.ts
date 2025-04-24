@@ -2,127 +2,114 @@
  * Contains all prompts used for story generation with Gemini
  */
 
-/**
- * Builds a prompt for generating a story title based on characters and topic
- */
-export function buildTitlePrompt(characters: string, topic: string): string {
-  return `Generate a captivating, kid-friendly title for a children's story with these details:
-Characters: ${characters}
-Topic: ${topic}
-
-Create a title that's engaging, concise (5-8 words), and captures the imagination.
-Respond with ONLY the title text, nothing else.`;
-}
+import { StoryLength } from "../../../types"; // Corrected import path for types
 
 /**
- * Builds a prompt for generating a story plan
+ * Builds a prompt for generating a complete story (title, text, image briefs) 
+ * using OpenAI, requesting JSON output.
+ * @param characters Character description string.
+ * @param topic The main topic/theme of the story.
+ * @param length Desired story length ('short', 'medium', 'long').
+ * @returns The prompt string for the OpenAI API.
  */
-export function buildPlanPrompt(
-  characters: string, 
-  topic: string, 
-  length: string
-): string {
-  // Determine the number of sections based on story length
-  const sectionCount = length === "short" ? 3 : length === "medium" ? 5 : 7;
-  
-  return `Create a plan for a children's story with these details:
-Characters: ${characters}
-Topic: ${topic}
-Length: ${sectionCount} sections
-
-Create exactly ${sectionCount} brief section descriptions that form a coherent story arc with:
-- A clear beginning that introduces the characters and setting
-- A middle with rising action and challenges
-- A satisfying resolution
-
-IMPORTANT: Format your response as a valid JSON array of strings called "plan", with each string being a brief section description.
-Example format: {"plan": ["Section 1 description", "Section 2 description", ...]}`;
-}
-
-/**
- * Builds a prompt for generating the text for a specific story section
- */
-export function buildSectionTextPrompt(
+export function buildCompleteStoryPrompt(
   characters: string,
   topic: string,
-  planItem: string,
-  sectionIndex: number,
-  totalSections: number,
-  previousSectionsText: string
+  length: StoryLength
 ): string {
-  const previousContext = sectionIndex > 0
-    ? `\n\n--- Previous Story Context ---\n${previousSectionsText}\n----------------------------\n\n`
-    : "";
+  const sectionEstimate = length === "short" ? 3 : length === "medium" ? 5 : 7;
 
-  return `Write an engaging section of a children's story based on the following details and context.
+  return `Please generate a complete children's story based on these details:
+
 Characters: ${characters}
 Topic: ${topic}
-Overall Plan Item for this Section: ${planItem}
-Section Position: ${sectionIndex + 1} of ${totalSections}${previousContext}
-Instructions for this section:
-- Write approximately 50-80 words.
-- Make it age-appropriate for children 5-8 years old.
-- Use simple vocabulary and short sentences suitable for reading aloud.
-- Include dialogue between characters where appropriate.
-- Ensure this section logically follows the 'Previous Story Context' (if provided) and smoothly transitions to the next part of the story based on the overall plan.
-- Specifically, this section should ${sectionIndex === 0
-    ? "introduce the characters and setting."
-    : sectionIndex === totalSections - 1
-      ? "provide a satisfying conclusion to the story, wrapping up the events from the previous context."
-      : `advance the plot based on the plan item ('${planItem}') and the previous context.`}
-  
-IMPORTANT: Respond with ONLY the generated text for this specific section (${sectionIndex + 1}). Do not repeat the previous context or include titles/section numbers in your response.`;
+Desired Length: Approximately ${sectionEstimate} sections (guideline, adjust for narrative flow).
+Target Audience: Children aged 5-8 years old.
+
+Instructions:
+1.  Create a captivating title for the story.
+2.  Divide the story into logical sections (around ${sectionEstimate}).
+3.  For each section:
+    *   Write engaging narrative text (around 50-100 words per section).
+    *   Use simple vocabulary and sentence structures suitable for reading aloud.
+    *   Include dialogue where appropriate.
+    *   Ensure smooth transitions between sections, forming a coherent plot with a beginning, middle, and end.
+    *   Create a concise (1-2 sentences) **imageBrief** that visually describes the key moment or scene in that section. This brief should guide an image generation model (like DALL-E) effectively.
+
+Output Format:
+Return ONLY a single, valid JSON object adhering strictly to this structure:
+{
+  "title": "[Generated Story Title]",
+  "sections": [
+    {
+      "text": "[Narrative text for section 1]",
+      "imageBrief": "[Visual description/brief for section 1 image]"
+    },
+    {
+      "text": "[Narrative text for section 2]",
+      "imageBrief": "[Visual description/brief for section 2 image]"
+    },
+    // ... continue for all sections ...
+  ]
+}
+
+Do not include any explanations, introductory text, or markdown formatting outside the JSON structure.`;
 }
 
 /**
- * Builds a prompt for generating an image for a story section
+ * Builds a prompt for generating an image for a story section.
+ * UPDATED: Takes imageBrief directly.
  */
 export function buildImagePrompt(
   characters: string,
-  planItem: string,
-  sectionText: string
+  imageBrief: string // Changed from planItem and sectionText
 ): string {
-  // Note: We rely on the character avatar being passed into the generation model separately
-  // for primary character style reference. This prompt focuses on scene and style consistency.
-  return `Create an illustration for a section of a children's story based on the following details.
+  // This prompt is now simpler, relying on the pre-generated imageBrief.
+  // Character description is still included for potential consistency checks by the model.
+  return `Generate an illustration for a children's storybook based on this description:
 
 Characters: ${characters}
-Scene Description from Plan: ${planItem}
-Key Moment/Action from Text: ${sectionText.substring(0, 250)}...
+Scene Brief: ${imageBrief}
 
 Style Guidelines:
-- Please generate this scene in a flat, vector-based cartoon style with bold, dark outlines defining all shapes.
-- The characters should have simple, stylized features consistent with the provided avatar's design (if an avatar was provided), including the use of clean lines and a focus on clear, expressive shapes. Create *original* characters based *only* on these descriptions.
-- **CRITICAL:** Avoid any resemblance to known copyrighted characters, brands, or specific art styles (e.g., do not make characters look like Thomas the Tank Engine, Disney characters, Peppa Pig, etc.). Focus on originality.
-- Aim for a clean and graphic aesthetic with a potentially subtle, uniform texture overall.
-- Ensure the style is consistent with any previously generated image context provided.
-- Include relevant background elements to establish the setting based on the text.
-- Focus on the main action described in the scene.
-- **Output Aspect Ratio:** Aim for a widescreen 16:9 aspect ratio (approximately 800x460 pixels).
+- Render in a flat, vector-based cartoon style with bold, dark outlines.
+- Use simple, stylized character features.
+- Use solid, matte colors. Avoid gradients or complex shading.
+- Create a bright, cheerful, and simple look suitable for young children (ages 5-8).
+- Maintain a widescreen 16:9 aspect ratio.
+- Focus on the scene described in the brief.
 
-**Strict Constraints (Must Follow):**
-- **Single Character:** The image must contain ONLY ONE instance of the main character described. Do NOT show the character multiple times.
-- **No Text:** The image must NOT contain any letters, words, numbers, or text of any kind.
-- **Single Frame:** The output must be a single, unified landscape image. Do NOT create multiple panels, frames, or comic-book-style layouts.
+**CRITICAL Constraints:**
+- **Originality:** Create *original* character designs and scenes based *only* on the provided descriptions. Avoid any resemblance to known copyrighted characters, brands, or specific art styles (e.g., Disney, Peppa Pig).
+- **Single Character Instance:** If the main character is mentioned, show ONLY ONE instance of them.
+- **No Text:** The image must NOT contain any letters, words, or numbers.
+- **Single Frame:** Output a single, unified image. Do NOT use multiple panels or comic layouts.
 
-IMPORTANT: Respond ONLY with the image. Keep the style friendly and appropriate for young children. Maintain visual consistency with the character reference and any previous image context. **Generate original designs, avoiding copyrighted styles/characters.** **Strictly adhere to the constraints listed above.**`;
+Respond ONLY with the image data. Strictly adhere to all constraints.`;
 }
 
 /**
- * Builds a prompt for generating story topic suggestions
+ * Builds a prompt for generating story topic suggestions using OpenAI.
+ * (Updated for clearer JSON instructions)
  */
 export function buildTopicSuggestionsPrompt(
   age: number,
   gender: string
 ): string {
-  return `Suggest 9 simple, creative, and fun story *ideas* or *titles* suitable for a ${age}-year-old ${gender}.
-Each suggestion should be a short phrase (1-6 words) that hints at a story, not just a description. For example, "The adventurous little star" is better than "A little star".
+  return `Suggest 9 creative and fun story topic ideas suitable for a ${age}-year-old ${gender}.
+Each suggestion should be a short phrase (1-6 words).
 For each suggestion, provide the text and a string with 1-2 relevant emojis.
-Return the suggestions ONLY as a JSON array of objects, where each object has a "text" key (string) and an "emojis" key (string).
-Example format: [
-  {"text": "A talking squirrel's big secret", "emojis": "🐿️🤫"},
-  {"text": "The magical paintbrush", "emojis": "🖌️✨"},
-  {"text": "The day the crayons quit", "emojis": "🖍️😠"},
-  {"text": "Lost in the candy kingdom", "emojis": "🍬👑"}
-]`;
+
+Output Format:
+Return ONLY a single, valid JSON object adhering strictly to this structure:
+{
+  "topics": [
+    {"text": "[Topic idea 1]", "emojis": "[Emojis 1]"},
+    {"text": "[Topic idea 2]", "emojis": "[Emojis 2]"},
+    // ... up to 9 topic suggestions ...
+  ]
+}
+
+Example Topic Object: {"text": "A talking squirrel's big secret", "emojis": "🐿️🤫"}
+Do not include any explanations or text outside the JSON structure.`;
 } 

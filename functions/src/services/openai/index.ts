@@ -1,21 +1,20 @@
 import OpenAI from "openai";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+// import * as fs from "node:fs";
+// import * as os from "node:os";
+// import * as path from "node:path";
 import * as logger from "firebase-functions/logger";
 import { defineString } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 
-// Import prompts
+// Import prompts - UNCOMMENTING imports now that prompts are defined
 import {
-  buildTitlePrompt,
-  buildPlanPrompt,
-  buildSectionTextPrompt,
-  buildImagePrompt
+  buildImagePrompt,
+  buildCompleteStoryPrompt,
+  buildTopicSuggestionsPrompt
 } from "../../prompts";
 
 // Import necessary types
-import { StoryLength } from "types";
+import { StoryLength, TopicSuggestion } from "../../../../types";
 
 // Define the secret parameter for the OpenAI API Key
 const openAIApiKey = defineString("OPENAI_API_KEY");
@@ -51,14 +50,14 @@ export interface OpenAITTSConfig {
 
 // Default OpenAI voices
 export const OPENAI_VOICES = {
-  FEMALE_YOUNG: "shimmer", // Young female voice
-  MALE_YOUNG: "echo", // Young male voice
-  FEMALE_CHILD: "alloy", // Neutral voice that can sound like a child
-  MALE_CHILD: "fable", // Friendly, warm voice that can work for a child
+  FEMALE_YOUNG: "ballad", // Young female voice
+  MALE_YOUNG: "ballad", // Young male voice
+  FEMALE_CHILD: "ballad", // Neutral voice that can sound like a child
+  MALE_CHILD: "ballad", // Friendly, warm voice that can work for a child
 };
 
 // Default TTS model
-const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
+const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts"; // DO NOT CHANGE THIS
 
 /**
  * Generate audio using OpenAI TTS API
@@ -77,8 +76,8 @@ export async function generateOpenAIAudio(
   
   // Get configuration options with defaults
   const model = config?.model || DEFAULT_TTS_MODEL;
-  const voice = config?.voice || OPENAI_VOICES.FEMALE_YOUNG;
-  const speed = config?.speed ?? 0.25; // Default if not provided
+  const voice = config?.voice || OPENAI_VOICES.MALE_YOUNG;
+  const speed = config?.speed ?? 0.8; // Default if not provided
   
   try {
     logger.info(`Sending TTS request to OpenAI for text (${text.length} chars) with voice ${voice}`);
@@ -87,7 +86,7 @@ export async function generateOpenAIAudio(
     const response = await client.audio.speech.create({
       model,
       voice,
-      instructions: "Use a warm gentle voice",
+      // instructions: "Use a warm gentle voice", // Instructions may not be valid for tts-1
       input: text,
       speed,
       response_format: "mp3",
@@ -125,7 +124,8 @@ export async function generateAndUploadOpenAIAudio(
     
     // Initialize Firebase Storage if needed
     const storage = admin.storage();
-    const audioFile = storage.bucket().file(storagePath);
+    const bucket = storage.bucket();
+    const audioFile = bucket.file(storagePath);
     
     // Upload the audio buffer to Firebase Storage
     await audioFile.save(audioBuffer, { 
@@ -148,267 +148,232 @@ export async function generateAndUploadOpenAIAudio(
   }
 }
 
-/**
- * Generate a story title using OpenAI
- * @param characters Character description
- * @param topic Story topic
- * @param config OpenAI configuration options
- * @returns Generated title string
- */
-export async function generateOpenAIStoryTitle(
-  characters: string,
-  topic: string,
-  config?: OpenAIConfig
-): Promise<string> {
-  try {
-    logger.info("Generating title with OpenAI");
-    const client = getOpenAIClient();
-    
-    // Get the prompt from our prompt builder
-    const prompt = buildTitlePrompt(characters, topic);
-    
-    // Create chat completion
-    const response = await client.chat.completions.create({
-      model: config?.model || "gpt-4o-mini", // Use mini for cost efficiency on simple tasks
-      temperature: config?.temperature || 0.7,
-      max_tokens: config?.max_tokens || 30, // Titles are short
-      messages: [
-        { role: "system", content: "You are a creative children's story title generator." },
-        { role: "user", content: prompt }
-      ]
-    });
-    
-    // Extract the title
-    const title = response.choices[0]?.message?.content?.trim() || "My Story";
-    logger.info(`OpenAI generated title: "${title}"`);
-    
-    return title;
-  } catch (error) {
-    logger.error("OpenAI title generation failed:", error);
-    throw error;
-  }
+// --- Interfaces for Complete Story Generation ---
+// Moved these definitions above the function that uses them
+interface GeneratedSection {
+  text: string;
+  imageBrief: string;
 }
 
+interface CompleteStoryResult {
+  title: string;
+  sections: GeneratedSection[];
+}
+
+// --- NEW: Generate Complete Story (Text and Image Briefs) ---
 /**
- * Generate a story plan using OpenAI
- * @param characters Character description
- * @param topic Story topic
- * @param length Story length
- * @param config OpenAI configuration options
- * @returns Array of plan strings
+ * Generate a complete story narrative and image briefs using OpenAI.
+ * @param characters Character description string.
+ * @param topic The main topic/theme of the story.
+ * @param length Desired story length ('short', 'medium', 'long').
+ * @param config Optional OpenAI configuration.
+ * @returns A promise resolving to an object containing the story title and an array of sections, each with text and an image brief.
  */
-export async function generateOpenAIStoryPlan(
+export async function generateOpenAICompleteStory(
   characters: string,
   topic: string,
   length: StoryLength,
   config?: OpenAIConfig
-): Promise<string[]> {
+): Promise<CompleteStoryResult> {
+  const startTime = Date.now(); // Start timer
   try {
-    logger.info("Generating story plan with OpenAI");
+    logger.info("Generating complete story with OpenAI");
     const client = getOpenAIClient();
-    
-    // Get the prompt from our prompt builder
-    const prompt = buildPlanPrompt(characters, topic, length);
-    
-    // Create chat completion with JSON response mode
+
+    // Build the comprehensive prompt using the new builder
+    const prompt = buildCompleteStoryPrompt(characters, topic, length);
+
+    // Use a more capable model for this complex task
+    const model = config?.model || "gpt-4o";
+    const maxTokens = config?.max_tokens || (length === "long" ? 4000 : length === "medium" ? 2500 : 1500);
+
+    logger.info(`Sending request to ${model} for complete story generation.`);
     const response = await client.chat.completions.create({
-      model: config?.model || "gpt-4o-mini",
+      model: model,
       temperature: config?.temperature || 0.7,
-      max_tokens: config?.max_tokens || 1000,
+      max_tokens: maxTokens,
       response_format: { type: "json_object" }, // Request JSON output
       messages: [
-        { 
-          role: "system", 
-          content: "You are a creative children's story planner. You output valid JSON with a 'plan' array of strings." 
+        {
+          role: "system",
+          content: "You are a brilliant children's storyteller. Generate a complete story based on the user's request. The story should be divided into logical sections. For each section, provide the narrative text and a concise, visually descriptive brief (max 1-2 sentences) suitable for an image generation model (like DALL-E). Output a valid JSON object with the structure: {\"title\": \"Story Title\", \"sections\": [{\"text\": \"Section 1 narrative...\", \"imageBrief\": \"Image brief for section 1...\"}, ...]}"
         },
         { role: "user", content: prompt }
       ]
     });
-    
-    // Extract and parse the plan
+    const endTime = Date.now(); // End timer
+    logger.info(`OpenAI story generation request took ${endTime - startTime} ms.`); // Log duration
+
     const content = response.choices[0]?.message?.content;
-    
+
     if (!content) {
-      logger.error("OpenAI returned empty plan content");
-      return ["Beginning", "Middle", "End"];
+      logger.error("OpenAI returned empty content for complete story.");
+      throw new Error("AI failed to generate story content.");
     }
-    
+
     try {
       // Parse the JSON response
-      const parsedContent = JSON.parse(content);
-      
-      if (Array.isArray(parsedContent.plan) && parsedContent.plan.length > 0) {
-        const plan = parsedContent.plan.filter((item: unknown): item is string => typeof item === "string");
-        logger.info(`OpenAI generated plan with ${plan.length} sections.`);
-        return plan;
+      const parsedContent = JSON.parse(content) as CompleteStoryResult;
+
+      // Basic validation
+      if (
+        parsedContent &&
+        typeof parsedContent.title === "string" &&
+        Array.isArray(parsedContent.sections) &&
+        parsedContent.sections.every(
+          (s: GeneratedSection) => typeof s.text === "string" && typeof s.imageBrief === "string"
+        ) &&
+        parsedContent.sections.length > 0
+      ) {
+        logger.info(`OpenAI generated story titled "${parsedContent.title}" with ${parsedContent.sections.length} sections.`);
+        return parsedContent;
       } else {
-        // Fallback if structure doesn't match
-        logger.warn("OpenAI plan didn't have expected structure. Response:", content);
+        logger.warn("OpenAI story response structure mismatch. Raw:", content);
+        throw new Error("AI response did not match expected format.");
       }
     } catch (parseError) {
-      logger.error("Failed to parse OpenAI plan JSON:", parseError);
-      logger.warn("Raw content:", content);
+      logger.error("Failed to parse OpenAI complete story JSON:", parseError, "Raw content:", content);
+      throw new Error("Failed to parse AI story response.");
     }
-    
-    // Fallback to default
-    return ["Beginning", "Middle", "End"];
   } catch (error) {
-    logger.error("OpenAI plan generation failed:", error);
-    throw error;
+    const endTime = Date.now(); // End timer even on error
+    logger.error(`OpenAI complete story generation failed after ${endTime - startTime} ms:`, error);
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error("Unknown error during story generation.");
+    }
   }
 }
 
 /**
- * Generate story section text using OpenAI
- * @param characters Character description
- * @param topic Story topic
- * @param planItem Current section plan
- * @param sectionIndex Current section index
- * @param totalSections Total number of sections
- * @param previousSectionsText Previous sections text for continuity
- * @param config OpenAI configuration options
- * @returns Generated section text
+ * Generates story topic suggestions using OpenAI.
+ * @param age Approximate age of the child.
+ * @param gender Gender of the child.
+ * @param config Optional OpenAI configuration.
+ * @returns A promise resolving to an array of TopicSuggestion objects.
  */
-export async function generateOpenAIStorySectionText(
-  characters: string,
-  topic: string,
-  planItem: string,
-  sectionIndex: number,
-  totalSections: number,
-  previousSectionsText: string,
+export async function generateOpenAITopicSuggestions(
+  age: number,
+  gender: string,
   config?: OpenAIConfig
-): Promise<string> {
+): Promise<TopicSuggestion[]> {
   try {
-    logger.info(`Generating section ${sectionIndex} text with OpenAI`);
+    logger.info(`Generating topic suggestions for age ${age}, gender ${gender} with OpenAI`);
     const client = getOpenAIClient();
-    
-    // Get the prompt from our prompt builder
-    const prompt = buildSectionTextPrompt(
-      characters, 
-      topic, 
-      planItem, 
-      sectionIndex, 
-      totalSections,
-      previousSectionsText
-    );
-    
-    // Create chat completion
+
+    // Build the prompt using the new builder
+    const prompt = buildTopicSuggestionsPrompt(age, gender);
+    const model = config?.model || "gpt-4o-mini"; // Mini is likely sufficient
+
     const response = await client.chat.completions.create({
-      model: config?.model || "gpt-4o", // Better quality for main content generation
-      temperature: config?.temperature || 0.7,
-      max_tokens: config?.max_tokens || 600, // For decent sized story sections
+      model: model,
+      temperature: config?.temperature || 0.8,
+      max_tokens: config?.max_tokens || 300,
+      response_format: { type: "json_object" },
       messages: [
-        { 
-          role: "system", 
-          content: "You are a children's story writer creating engaging, age-appropriate content. Respond with only the story text, no titles or section numbers."
+        {
+          role: "system",
+          content: "You suggest creative and age-appropriate story topics for children. Include 1-2 relevant emojis for each topic. Output a valid JSON object with the structure: {\"topics\": [{\"text\": \"Topic text...\", \"emojis\": \"💡✨\"}, ...]}"
         },
         { role: "user", content: prompt }
       ]
     });
-    
-    // Extract the generated text
-    const generatedText = response.choices[0]?.message?.content?.trim() || "";
-    
-    if (!generatedText) {
-      throw new Error("OpenAI text generation failed (empty content).");
+
+    const content = response.choices[0]?.message?.content;
+
+    if (!content) {
+      logger.error("OpenAI returned empty content for topic suggestions.");
+      throw new Error("AI failed to generate topic suggestions.");
     }
-    
-    // Clean up the response - remove any scene prefixes similar to the Gemini version
-    const cleanedText = generatedText.replace(/^(Scene|Part|Chapter)\s+\d+[:.]\s*/i, "");
-    
-    logger.info(`OpenAI generated text (${cleanedText.length} chars) for section ${sectionIndex}`);
-    return cleanedText;
+
+    try {
+      const parsedContent = JSON.parse(content) as { topics: TopicSuggestion[] };
+
+      if (
+        parsedContent &&
+        Array.isArray(parsedContent.topics) &&
+        parsedContent.topics.every(
+          (t: TopicSuggestion) => typeof t.text === "string" && typeof t.emojis === "string"
+        ) &&
+        parsedContent.topics.length > 0
+      ) {
+        logger.info(`OpenAI generated ${parsedContent.topics.length} topic suggestions.`);
+        return parsedContent.topics;
+      } else {
+        logger.warn("OpenAI topic suggestions response structure mismatch. Raw:", content);
+        throw new Error("AI response did not match expected topic format.");
+      }
+    } catch (parseError) {
+      logger.error("Failed to parse OpenAI topic suggestions JSON:", parseError, "Raw content:", content);
+      throw new Error("Failed to parse AI topic suggestions response.");
+    }
   } catch (error) {
-    logger.error(`OpenAI section ${sectionIndex} text generation failed:`, error);
-    throw error;
+    logger.error("OpenAI topic suggestion generation failed:", error);
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error("Unknown error during topic suggestion generation.");
+    }
   }
 }
 
 /**
- * Generate an image for a story section using DALL-E 3
- * @param characters Character description
- * @param planItem Current section plan
- * @param sectionText Current section text
- * @param config OpenAI configuration options
- * @returns Base64 encoded image data URI string
+ * Generate an image for a story section using OpenAI DALL-E 3.
+ * UPDATED: Uses imageBrief instead of planItem/sectionText.
+ * @param characters Character description string (used for consistency).
+ * @param imageBrief Concise visual description for the scene.
+ * @param config Optional OpenAI configuration (only model is used for DALL-E).
+ * @returns A promise resolving to the base64 encoded PNG image string (data URI).
  */
 export async function generateOpenAIStorySectionImage(
   characters: string,
-  planItem: string,
-  sectionText: string,
-  config?: OpenAIConfig
+  imageBrief: string,
+  // config?: OpenAIConfig // Config might not be needed if defaults are okay
 ): Promise<string> {
+  const startTime = Date.now(); // Start timer
   try {
-    logger.info("Generating image with DALL-E 3");
+    logger.info("Generating section image with OpenAI gpt-image-1");
     const client = getOpenAIClient();
-    
-    // Get base prompt from our prompt builder but we need to adapt it for DALL-E
-    // DALL-E cannot take previous images as input, so we adapt it
-    const basePrompt = buildImagePrompt(characters, planItem, sectionText);
-    
-    // Extract just the prompt text without the instructions about responding with only an image
-    // and keeping style consistent with previous images (since DALL-E can't see those)
-    const promptLines = basePrompt.split("\n").filter(line => 
-      !line.toLowerCase().includes("respond only with") && 
-      !line.toLowerCase().includes("previous image")
-    );
-    
-    // Add DALL-E specific style guidance
-    const dallePrompt = `${promptLines.join("\n")}
 
-Additional DALL-E specific instructions:
-- Render in a flat, vector-based cartoon style with bold, dark outlines.
-- Use solid, matte colors without gradients or complex shading.
-- Stylize characters with simple, clean lines and clear, expressive shapes.
-- Create a bright, cheerful look suitable for a children's storybook.
-- Avoid any resemblance to known copyrighted characters or brands.
-- Maintain a widescreen 16:9 aspect ratio composition.
-- Focus on the main action described in the scene.`;
-    
-    logger.info("Adapted DALL-E prompt:", dallePrompt);
-    
-    // Generate the image with DALL-E 3
+    // Build the image prompt using the provided brief and character info
+    const prompt = buildImagePrompt(characters, imageBrief); 
+
+    // Use gpt-image-1 model
+    const model = "gpt-image-1"; // CHANGED model
+    const size = "1024x1024"; // Keep standard size for now
+
+    logger.info(`Sending request to ${model} with prompt based on image brief: "${imageBrief}"`);
+
     const response = await client.images.generate({
-      model: config?.model || "dall-e-3",
-      prompt: dallePrompt,
-      n: 1,
-      size: "1792x1024", // Closest to 16:9 available in DALL-E 3
-      quality: "standard",
-      response_format: "b64_json", // Request base64 data
-      style: "vivid" // For more vibrant colors suitable for children's stories
+      model: model,
+      prompt: prompt,
+      size: size
     });
-    
-    // Check if we have a response with base64 data
-    const imageData = response.data[0]?.b64_json;
-    if (!imageData) {
-      logger.error("DALL-E returned no image data.");
-      throw new Error("Image generation failed (no data returned).");
+    const endTime = Date.now(); // End timer
+    logger.info(`OpenAI image generation request took ${endTime - startTime} ms.`); // Log duration
+
+    // Extract base64 data
+    const base64Json = response.data[0]?.b64_json;
+    if (!base64Json) {
+      logger.error("OpenAI gpt-image-1 response missing image data.");
+      throw new Error("AI failed to return image data.");
     }
-    
-    // Get the MIME type (should be image/png from DALL-E 3)
-    const mimeType = "image/png";
-    logger.info("DALL-E image generated successfully (base64 data)");
-    
-    // Return in the expected data URI format
-    return `data:${mimeType};base64,${imageData}`;
+
+    // Prepend the data URI scheme
+    const imageDataUri = `data:image/png;base64,${base64Json}`;
+    logger.info(`OpenAI gpt-image-1 image generated successfully (Data URI length: ${imageDataUri.length})`);
+
+    return imageDataUri; // Return the base64 data URI
   } catch (error) {
-    logger.error("DALL-E image generation failed:", error);
-    throw error;
+    const endTime = Date.now(); // End timer even on error
+    logger.error(`OpenAI image generation failed after ${endTime - startTime} ms:`, error);
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error("Unknown error during image generation.");
+    }
   }
 }
 
-/**
- * Utility function to save temporary debug files (for development)
- */
-export async function saveDebugFile(content: string, filename: string): Promise<string> {
-  try {
-    const tempDir = os.tmpdir();
-    const filePath = path.join(tempDir, filename);
-    fs.writeFileSync(filePath, content);
-    logger.info(`Debug file saved to ${filePath}`);
-    return filePath;
-  } catch (error) {
-    logger.error("Failed to save debug file:", error);
-    return "error";
-  }
-} 
+// REMOVED: saveDebugFile function if it's no longer needed or move if still used elsewhere 

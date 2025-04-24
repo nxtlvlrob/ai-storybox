@@ -2,27 +2,10 @@
 import { Timestamp, FieldValue } from "firebase/firestore";
 
 // Gemini Service Types
-export interface GeminiConfig {
-  apiKey?: string;
-  temperature?: number;
-  maxOutputTokens?: number;
-}
-
-export interface GenerateTextInput {
-  prompt: string;
-  config?: GeminiConfig;
-  outputFormat?: "text" | "json";
-}
-
-export interface GenerateImageInput {
-  textPrompt: string;
-  characterImageBase64?: string | null;
-  config?: GeminiConfig;
-}
-
-export interface StoryPlan {
-  plan: string[];
-}
+// export interface GeminiConfig { ... }
+// export interface GenerateTextInput { ... }
+// export interface GenerateImageInput { ... }
+// export interface StoryPlan { ... }
 
 export interface Character {
     id: string;          // Firestore document ID
@@ -38,22 +21,21 @@ export interface Character {
  * Represents the structure of a story document stored in Firestore.
  */
 export interface StoryDocument {
-    id: string;                       // Firestore document ID (usually added client-side after getting ref)
+    id: string;                       // Firestore document ID
     userId: string;                   // ID of the user who created the story
     title: string;                   // Story title
-    topic: string | null;             // User-provided topic 
+    topic: string | null;             // User-provided topic
     originalPrompt: string | null;    // Full prompt if user provided one directly
     characterIds: string[];           // Array of character IDs selected
-    length: StoryLength;              // Desired story length 
+    length: StoryLength;              // Desired story length
     status: StoryStatus;              // Current generation state
     errorMessage?: string | null;      // Error message if status is 'error'
-    plan: string[];                   // Generated story plan (array of scene descriptions)
     sections: StorySection[];         // Array containing generated content for each section
-    createdAt: Timestamp | FieldValue | Date;      // Firestore timestamp when the job was created (Date on client)
-    updatedAt: Timestamp | FieldValue | Date;     // Firestore timestamp, updated by the Cloud Function (Date on client)
-    ttsProvider?: "google" | "elevenlabs" | "openai"; // The TTS provider to use for audio generation
+    createdAt: Timestamp | FieldValue | Date;      // Firestore timestamp
+    updatedAt: Timestamp | FieldValue | Date;     // Firestore timestamp
+    ttsProvider?: /*"google" |*/ "elevenlabs" | "openai"; // REMOVED: google option
     gender?: "male" | "female";       // Gender for voice selection in TTS
-    voiceId?: string; // Add voiceId used for generation
+    voiceId?: string;                 // Voice ID used for generation
 }
 
 /**
@@ -61,8 +43,8 @@ export interface StoryDocument {
  */
 export interface StorySection {
     index: number;            // Section index (0-based)
-    planItem: string;         // The description from the generated plan for this section
     text: string | null;      // Generated text content
+    imageBrief: string | null; // ADDED: Brief description for image generation
     imageUrl: string | null;  // Permanent Firebase Storage URL for the generated image
     audioUrl: string | null;  // Permanent Firebase Storage URL for the generated audio
 }
@@ -72,12 +54,10 @@ export interface StorySection {
  */
 export type StoryStatus =
     | 'queued'          // Initial state, waiting for Cloud Function pickup
-    | 'planning'        // Story plan is being generated
-    | `generating_text_${number}` // Generating text for section {number}
-    | `generating_image_${number}`// Generating image for section {number}
-    | `generating_audio_${number}`// Generating audio for section {number}
+    | 'generating_story' // Generating the complete story text and image briefs
+    | `generating_assets_${number}` // ADDED: Generating image and audio for section {number} concurrently
     | 'complete'        // All sections generated successfully
-    | 'error';          // An error occurred during generation 
+    | 'error';          // An error occurred during generation
 
 // Interface for a single section within a story
 export interface StorySectionData {
@@ -141,6 +121,12 @@ export interface Story {
  * Represents the possible lengths for a generated story.
  */
 export type StoryLength = 'short' | 'medium' | 'long';
+
+// ADDED: Structure for topic suggestions
+export interface TopicSuggestion {
+  text: string;
+  emojis: string; // String containing 1-2 emojis
+}
 
 export interface UserProfile {
     uid: string;
