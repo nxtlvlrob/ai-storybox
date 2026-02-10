@@ -1,6 +1,8 @@
-# Storybox Project
+# Storybox
 
-This project runs a React/Vite frontend and an Express backend on a Raspberry Pi in Kiosk mode.
+Storybox is an AI-powered storytelling app for children. Kids pick from AI-suggested story topics (presented as fun emoji cards), and the app generates a fully illustrated, narrated story where the child is the main character. Stories are produced in the cloud using OpenAI for text and images, and OpenAI or ElevenLabs for text-to-speech, then played back in a touch-friendly full-screen viewer with swipe navigation and auto-play narration.
+
+Designed for ages 3–8 and built to run as a kiosk on a Raspberry Pi with a touchscreen, though it works just as well on a tablet or desktop browser.
 
 See `docs/setup-notes.md` for detailed setup instructions.
 
